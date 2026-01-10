@@ -1,7 +1,7 @@
 -- ===============================
--- Roblox Brookhaven - Painel Final Único
--- Velocímetro + Cronômetro
--- Delta Executor / LocalScript
+-- Roblox Brookhaven - Painel Único
+-- Velocímetro (veículo) + Cronômetro
+-- Painéis arrastáveis, mesmo minimizados
 -- ===============================
 
 local Players = game:GetService("Players")
@@ -11,7 +11,7 @@ local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 
 -- ===============================
--- FUNÇÕES ÚTEIS
+-- FUNÇÃO PARA ARRASTAR QUALQUER FRAME
 -- ===============================
 local function makeDraggable(frame)
 	local dragging, dragStart, startPos
@@ -38,6 +38,26 @@ local function makeDraggable(frame)
 			)
 		end
 	end)
+end
+
+-- ===============================
+-- FUNÇÃO PARA PEGAR VELOCIDADE REAL DO VEÍCULO
+-- ===============================
+local function getCarSpeedValue(character)
+	if not character then return nil end
+	local humanoid = character:FindFirstChildWhichIsA("Humanoid")
+	if not humanoid then return nil end
+	local seat = humanoid.SeatPart
+	if not seat then return nil end
+	local carModel = seat:FindFirstAncestorWhichIsA("Model")
+	if not carModel then return nil end
+
+	for _, obj in ipairs(carModel:GetDescendants()) do
+		if obj:IsA("NumberValue") and obj.Name:lower():find("speed") then
+			return obj
+		end
+	end
+	return nil
 end
 
 -- ===============================
@@ -187,133 +207,3 @@ miniCron.TextScaled = true
 miniCron.Visible = false
 Instance.new("UICorner", miniCron).CornerRadius = UDim.new(1,0)
 makeDraggable(miniCron)
-
--- ===============================
--- BOTÕES E MINIMIZAÇÃO
--- ===============================
-btnVel.MouseButton1Click:Connect(function()
-	velEnabled = not velEnabled
-	btnVel.Text = velEnabled and "ON" or "OFF"
-	btnVel.BackgroundColor3 = velEnabled and Color3.fromRGB(0,120,0) or Color3.fromRGB(120,0,0)
-
-	if not velEnabled then
-		for _, d in pairs(meters) do
-			if d.gui then d.gui:Destroy() end
-		end
-		meters = {}
-	end
-end)
-
-btnCron.MouseButton1Click:Connect(function()
-	chronoEnabled = not chronoEnabled
-	btnCron.Text = chronoEnabled and "ON" or "OFF"
-	btnCron.BackgroundColor3 = chronoEnabled and Color3.fromRGB(0,120,0) or Color3.fromRGB(120,0,0)
-	painelCron.Visible = chronoEnabled
-	if not chronoEnabled then miniCron.Visible = false end
-	if chronoEnabled then chronoTime = 0 end
-end)
-
-btnStartStop.MouseButton1Click:Connect(function()
-	chronoRunning = not chronoRunning
-	btnStartStop.Text = chronoRunning and "Parar" or "Iniciar"
-	btnStartStop.BackgroundColor3 = chronoRunning and Color3.fromRGB(255,0,0) or Color3.fromRGB(130,0,255)
-end)
-
-btnReset.MouseButton1Click:Connect(function()
-	chronoTime = 0
-end)
-
-btnClose.MouseButton1Click:Connect(function()
-	TweenService:Create(painel,TweenInfo.new(0.25),{Size=UDim2.fromOffset(0,0)}):Play()
-	task.wait(0.25)
-	painel.Visible = false
-	miniPainel.Position = painel.Position
-	miniPainel.Visible = true
-end)
-
-btnCloseCron.MouseButton1Click:Connect(function()
-	TweenService:Create(painelCron,TweenInfo.new(0.25),{Size=UDim2.fromOffset(0,0)}):Play()
-	task.wait(0.25)
-	painelCron.Visible = false
-	miniCron.Position = painelCron.Position
-	miniCron.Visible = true
-end)
-
-miniPainel.MouseButton1Click:Connect(function()
-	painel.Visible = true
-	TweenService:Create(painel,TweenInfo.new(0.25),{Size=UDim2.fromOffset(280,140)}):Play()
-	miniPainel.Visible = false
-end)
-
-miniCron.MouseButton1Click:Connect(function()
-	painelCron.Visible = true
-	TweenService:Create(painelCron,TweenInfo.new(0.25),{Size=UDim2.fromOffset(220,80)}):Play()
-	miniCron.Visible = false
-end)
-
--- ===============================
--- LOOP PRINCIPAL
--- ===============================
-RunService.RenderStepped:Connect(function(dt)
-	-- Velocímetro
-	if velEnabled then
-		for _, p in pairs(Players:GetPlayers()) do
-			if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-				local hrp = p.Character.HumanoidRootPart
-
-				-- ======= VELOCIDADE FIXA DO VEÍCULO =======
-				local vehicleSpeed = hrp:FindFirstChild("VehicleSeat") and hrp.VehicleSeat.MaxSpeed or 0
-				local convSpeed = vehicleSpeed
-
-				local meter = meters[p]
-				if not meter then
-					local bb = Instance.new("BillboardGui", hrp)
-					bb.Size = UDim2.new(0,140,0,35)
-					bb.StudsOffset = Vector3.new(0,3,0)
-					bb.AlwaysOnTop = true
-
-					local nameLabel = Instance.new("TextLabel", bb)
-					nameLabel.Size = UDim2.new(1,0,0.5,0)
-					nameLabel.BackgroundTransparency = 1
-					nameLabel.Text = p.Name
-					nameLabel.Font = Enum.Font.SourceSansBold
-					nameLabel.TextScaled = true
-					nameLabel.TextColor3 = Color3.new(1,1,1)
-
-					local speedLabel = Instance.new("TextLabel", bb)
-					speedLabel.Size = UDim2.new(1,0,0.5,0)
-					speedLabel.Position = UDim2.new(0,0,0.5,0)
-					speedLabel.BackgroundTransparency = 1
-					speedLabel.Font = Enum.Font.SourceSansBold
-					speedLabel.TextScaled = true
-					speedLabel.TextStrokeTransparency = 0
-
-					meters[p] = {gui=bb, speedLabel=speedLabel}
-					meter = meters[p]
-				end
-
-				if convSpeed <= 100 then
-					meter.speedLabel.TextColor3 = Color3.fromRGB(0,255,0)
-					meter.speedLabel.Text = "Vel: "..convSpeed
-				else
-					meter.speedLabel.TextColor3 = Color3.fromRGB(255,0,0)
-					meter.speedLabel.Text = "Vel: "..convSpeed.." 🚨"
-				end
-			end
-		end
-	else
-		for _, d in pairs(meters) do
-			if d.gui then d.gui:Destroy() end
-		end
-		meters = {}
-	end
-
-	-- Cronômetro
-	if chronoEnabled and chronoRunning then
-		chronoTime += dt
-	end
-	local minutes = math.floor(chronoTime/60)
-	local seconds = math.floor(chronoTime%60)
-	local ms = math.floor((chronoTime*100)%100)
-	cronLabel.Text = string.format("%02d:%02d:%02d",minutes,seconds,ms)
-end)
