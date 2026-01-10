@@ -1,0 +1,103 @@
+--[[
+Teste de Velocímetro Brookhaven
+Nick branco, "Vel: " RGB, número verde/vermelho+⚠️
+Botão On/Off arrastável
+]]
+
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+
+-- GUI
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Parent = player:WaitForChild("PlayerGui")
+
+-- Velocímetro
+local VelText = Instance.new("TextLabel")
+VelText.Size = UDim2.new(0, 250, 0, 60)
+VelText.Position = UDim2.new(0.5, -125, 0.1, 0)
+VelText.BackgroundTransparency = 1
+VelText.TextScaled = true
+VelText.Font = Enum.Font.SourceSansBold
+VelText.RichText = true
+VelText.Visible = false
+VelText.Parent = ScreenGui
+
+-- Botão On/Off
+local Button = Instance.new("TextButton")
+Button.Size = UDim2.new(0, 100, 0, 50)
+Button.Position = UDim2.new(0, 50, 0, 50)
+Button.Text = "OFF"
+Button.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+Button.Parent = ScreenGui
+Button.Active = true
+Button.Draggable = true
+
+local active = false
+
+-- Função pra pegar velocidade
+local function getCarSpeedValue(character)
+    if not character then return 0 end
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return 0 end
+    local seat = humanoid.SeatPart
+    if not seat or not seat:IsA("VehicleSeat") then return 0 end
+    local carModel = seat:FindFirstAncestorOfClass("Model")
+    if not carModel then return 0 end
+    for _, obj in ipairs(carModel:GetDescendants()) do
+        if obj:IsA("NumberValue") then
+            local name = obj.Name:lower()
+            if name:find("speed") or name:find("velocity") then
+                return obj.Value
+            end
+        end
+    end
+    return 0
+end
+
+-- Função pra gerar cor RGB dinâmica (arco-íris)
+local function RGBColor(tickTime)
+    local r = math.floor((math.sin(tickTime) * 127 + 128))
+    local g = math.floor((math.sin(tickTime + 2) * 127 + 128))
+    local b = math.floor((math.sin(tickTime + 4) * 127 + 128))
+    return string.format("#%02X%02X%02X", r, g, b)
+end
+
+-- Atualizar velocímetro
+local function updateVel()
+    if not active then return end
+    local speed = getCarSpeedValue(character)
+    local nick = player.Name
+    local warning = ""
+    local numColor = Color3.fromRGB(0, 255, 0) -- verde padrão
+
+    if speed >= 101 then
+        numColor = Color3.fromRGB(255, 0, 0) -- vermelho
+        warning = " ⚠️"
+    end
+
+    local rgbHex = RGBColor(tick()) -- cor dinâmica para "Vel: "
+    VelText.Text = string.format(
+        '<font color="white">%s</font>\n<font color="%s">Vel: </font><font color="#%02X%02X%02X">%d%s</font>',
+        nick, rgbHex, numColor.R*255, numColor.G*255, numColor.B*255, math.floor(speed), warning
+    )
+end
+
+-- Botão On/Off
+Button.MouseButton1Click:Connect(function()
+    active = not active
+    VelText.Visible = active
+    if active then
+        Button.Text = "ON"
+        Button.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+    else
+        Button.Text = "OFF"
+        Button.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+    end
+end)
+
+-- Loop de atualização
+while true do
+    updateVel()
+    wait(0.1)
+end
