@@ -1,7 +1,7 @@
 --[[
-🔥 Brookhaven Speed Monitor – Detecta cada jogador separadamente
+🔥 Brookhaven Driver Speed Monitor – Só motoristas
 Por Heitor
-Mostra a velocidade configurada do carro de cada jogador separadamente
+Mostra a velocidade configurada apenas do jogador que está dirigindo
 Botão ON/OFF arrastável
 ]]
 
@@ -9,9 +9,9 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
--- Criar GUI principal
+-- GUI principal
 local gui = Instance.new("ScreenGui")
-gui.Name = "SpeedMonitorGUI"
+gui.Name = "DriverSpeedMonitorGUI"
 gui.ResetOnSpawn = false
 gui.Parent = game:GetService("CoreGui")
 
@@ -80,25 +80,26 @@ end
 for _, player in ipairs(Players:GetPlayers()) do
     addPlayer(player)
 end
-
 Players.PlayerAdded:Connect(addPlayer)
 
--- Função para pegar velocidade configurada do carro de um jogador específico
-local function getConfiguredSpeed(character)
+-- Função para pegar velocidade configurada do motorista
+local function getDriverSpeed(character)
     if not character then return 0 end
     local humanoid = character:FindFirstChildWhichIsA("Humanoid")
     if not humanoid then return 0 end
     local seat = humanoid.SeatPart
     if not seat then return 0 end
 
-    -- Garantir que estamos pegando o modelo do carro desse seat específico
-    local carModel = seat:FindFirstAncestorWhichIsA("Model")
-    if not carModel then return 0 end
+    -- Checa se o jogador está realmente dirigindo (Driver)
+    if seat:IsA("VehicleSeat") and seat.Occupant == humanoid then
+        local carModel = seat:FindFirstAncestorWhichIsA("Model")
+        if not carModel then return 0 end
 
-    -- Procurar NumberValue de speed dentro **somente desse carro**
-    for _, obj in ipairs(carModel:GetDescendants()) do
-        if obj:IsA("NumberValue") and obj.Name:lower():find("speed") then
-            return obj.Value
+        -- Procurar NumberValue chamado "speed" dentro deste carro
+        for _, obj in ipairs(carModel:GetDescendants()) do
+            if obj:IsA("NumberValue") and obj.Name:lower():find("speed") then
+                return obj.Value
+            end
         end
     end
     return 0
@@ -111,19 +112,23 @@ RunService.RenderStepped:Connect(function()
         local velLabel = data.velLabel
 
         if enabled and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            bb.Enabled = true
-            bb.Adornee = player.Character:FindFirstChild("Head") or player.Character:FindFirstChild("HumanoidRootPart")
+            -- Velocidade somente se estiver dirigindo
+            local speed = getDriverSpeed(player.Character)
 
-            -- Velocidade específica deste jogador
-            local speed = getConfiguredSpeed(player.Character)
+            if speed > 0 then
+                bb.Enabled = true
+                bb.Adornee = player.Character:FindFirstChild("Head") or player.Character:FindFirstChild("HumanoidRootPart")
 
-            -- Atualizar cores e texto
-            if speed <= 100 then
-                velLabel.TextColor3 = Color3.fromRGB(0,255,0) -- verde
-                velLabel.Text = "Vel: "..speed
+                -- Atualizar cores
+                if speed <= 100 then
+                    velLabel.TextColor3 = Color3.fromRGB(0,255,0) -- verde
+                    velLabel.Text = "Vel: "..speed
+                else
+                    velLabel.TextColor3 = Color3.fromRGB(255,0,0) -- vermelho
+                    velLabel.Text = "Vel: "..speed.." ⚠️"
+                end
             else
-                velLabel.TextColor3 = Color3.fromRGB(255,0,0) -- vermelho
-                velLabel.Text = "Vel: "..speed.." ⚠️"
+                bb.Enabled = false
             end
         else
             bb.Enabled = false
