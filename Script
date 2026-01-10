@@ -1,17 +1,15 @@
 --[[
-🔥 Brookhaven Vehicle Speed Display – Corrigido
+🔥 Brookhaven Vehicle Speed Display – Novo, funcional
 Por Heitor
-Mostra velocidade de cada jogador (incluindo você) em tempo real
+Detecta a velocidade configurada do carro de todos os jogadores
 Botão ON/OFF arrastável
 ]]
 
--- Serviços
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
-local Camera = workspace.CurrentCamera
 
--- GUI principal
+-- Criar GUI principal
 local gui = Instance.new("ScreenGui")
 gui.Name = "SpeedDisplayGUI"
 gui.ResetOnSpawn = false
@@ -71,10 +69,9 @@ local function createBillboard(player)
     return billboard, velLabel
 end
 
--- Tabela para armazenar billboards
+-- Armazenar billboards
 local billboards = {}
 
--- Adicionar billboards para todos jogadores
 local function addPlayerBillboard(player)
     local bb, vel = createBillboard(player)
     billboards[player] = {billboard=bb, velLabel=vel}
@@ -86,16 +83,19 @@ end
 
 Players.PlayerAdded:Connect(addPlayerBillboard)
 
--- Função para pegar velocidade do carro configurada no Brookhaven
-local function getVehicleSpeed(player)
-    if not player.Character then return 0 end
-    local seat = player.Character:FindFirstChildWhichIsA("VehicleSeat", true)
-    if seat then
-        -- Brookhaven normalmente guarda a velocidade no próprio VehicleSeat
-        -- Tentamos pegar NumberValue chamado "MaxSpeed" ou "VehicleSpeedValue"
-        local speedVal = seat:FindFirstChildOfClass("NumberValue") 
-        if speedVal then
-            return speedVal.Value
+-- Função para pegar o NumberValue de velocidade do carro
+local function getCarSpeedValue(character)
+    if not character then return 0 end
+    local humanoid = character:FindFirstChildWhichIsA("Humanoid")
+    if not humanoid then return 0 end
+    local seat = humanoid.SeatPart
+    if not seat then return 0 end
+    local carModel = seat:FindFirstAncestorWhichIsA("Model")
+    if not carModel then return 0 end
+
+    for _, obj in ipairs(carModel:GetDescendants()) do
+        if obj:IsA("NumberValue") and obj.Name:lower():find("speed") then
+            return obj.Value
         end
     end
     return 0
@@ -109,10 +109,10 @@ RunService.RenderStepped:Connect(function()
         if enabled and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
             billboard.Enabled = true
             billboard.Adornee = player.Character:FindFirstChild("Head") or player.Character:FindFirstChild("HumanoidRootPart")
-            
-            local speed = getVehicleSpeed(player)
 
-            -- Atualiza o texto da velocidade com cores
+            local speed = getCarSpeedValue(player.Character)
+
+            -- Atualiza cores e texto
             if speed <= 100 then
                 velLabel.TextColor3 = Color3.fromRGB(0,255,0) -- verde
                 velLabel.Text = "Vel: "..speed
