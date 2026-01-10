@@ -1,0 +1,272 @@
+-- SpeedHUD LocalScript
+-- Coloque em StarterPlayer > StarterPlayerScripts
+-- Mostra um GUI (Billboard) acima de cada jogador que estiver dentro de um VehicleSeat (incluindo você).
+-- Linha 1: Nick (branco)
+-- Linha 2: "Vel:" (branco) + número da velocidade (verde 1-100, vermelho 101+ com ⚠️)
+-- A leitura da "velocidade colocada no veículo" usa a mesma lógica do seu script original:
+--   procura NumberValue cujo nome contenha "speed" no model do carro e só retorna quando
+--   obj.Value > 0 e a condição temporal `tick() % 1.3 > 0.15` for satisfeita.
+-- Se não encontrar / condição não satisfeita, exibe 0.
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+-- Config
+local REFRESH_INTERVAL = 0.6   -- checa jogadores sentados a cada X segundos (cria/remove GUIs)
+local MAX_DISTANCE = 350
+local STUDS_OFFSET = Vector3.new(0, 3.2, 0)
+
+local COLOR_WHITE = Color3.fromRGB(255,255,255)
+local COLOR_GREEN = Color3.fromRGB(76,175,80)
+local COLOR_RED   = Color3.fromRGB(244,67,54)
+
+-- Tabelas
+local guiByPlayer = {}   -- player -> { root = ScreenGui, container = Frame, nameLabel, velPrefix, velNumber, seat, vehicle }
+local refreshTimer = 0
+
+-- === Função original adaptada (retorna número ou nil) ===
+local function getCarSpeedValue_fromOriginal(character)
+    if not character then return nil end
+
+    local humanoid = character:FindFirstChildWhichIsA("Humanoid")
+    if not humanoid then return nil end
+
+    local seat = humanoid.SeatPart
+    if not seat then return nil end
+
+    local carModel = seat:FindFirstAncestorWhichIsA("Model")
+    if not carModel then return nil end
+
+    for _, obj in ipairs(carModel:GetDescendants()) do
+        if obj:IsA("NumberValue") and obj.Name:lower():find("speed") then
+            if obj.Value > 0 and tick() % 1.3 > 0.15 then
+                return obj.Value
+            end
+        end
+    end
+
+    return nil
+end
+-- ========================================================
+
+-- Util: verifica se player está sentado em VehicleSeat (qualquer ocupante)
+local function isPlayerSeated(player)
+    if not player or not player.Character then return false end
+    local humanoid = player.Character:FindFirstChildWhichIsA("Humanoid")
+    if not humanoid then return false end
+    local seat = humanoid.SeatPart
+    if not seat then return false end
+    if not seat:IsA("VehicleSeat") then return false end
+    return true, seat
+end
+
+local function getVehicleFromSeat(seat)
+    if not seat then return nil end
+    local node = seat
+    while node and node ~= Workspace do
+        if node:IsA("Model") then return node end
+        node = node.Parent
+    end
+    return nil
+end
+
+-- Cria GUI para jogador (Billboard usando ScreenGui + Adornee = seat/HRP)
+local function createGuiForPlayer(player)
+    -- Reaproveita se já existe
+    if guiByPlayer[player] and guiByPlayer[player].container and guiByPlayer[player].container.Parent then
+        return guiByPlayer[player]
+    end
+
+    -- Root ScreenGui (um por script) para manter organização
+    local root = PlayerGui:FindFirstChild("SpeedHUD_Root")
+    if not root then
+        root = Instance.new("ScreenGui")
+        root.Name = "SpeedHUD_Root"
+        root.ResetOnSpawn = false
+        root.Parent = PlayerGui
+    end
+
+    -- Container (Frame) posicionado via WorldToViewportPoint (será movido cada frame)
+    local container = Instance.new("Frame")
+    container.Name = "SpeedHUD_" .. tostring(player.UserId or player.Name)
+    container.Size = UDim2.new(0, 200, 0, 44)
+    container.BackgroundTransparency = 1
+    container.BorderSizePixel = 0
+    container.Parent = root
+
+    -- Line 1: Nick (branco)
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Name = "Name"
+    nameLabel.Size = UDim2.new(1, -6, 0.5, 0)
+    nameLabel.Position = UDim2.new(0, 3, 0, 0)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.Font = Enum.Font.SourceSansBold
+    nameLabel.TextSize = 18
+    nameLabel.TextScaled = true
+    nameLabel.TextColor3 = COLOR_WHITE
+    nameLabel.TextStrokeTransparency = 0.7
+    nameLabel.Text = player.DisplayName or player.Name
+    nameLabel.Parent = container
+
+    -- Line 2: "Vel:" (branco) + number (colored) -> usamos dois TextLabels lado a lado
+    local velFrame = Instance.new("Frame")
+    velFrame.Name = "VelFrame"
+    velFrame.Size = UDim2.new(1, -6, 0.5, 0)
+    velFrame.Position = UDim2.new(0, 3, 0.5, 0)
+    velFrame.BackgroundTransparency = 1
+    velFrame.Parent = container
+
+    local velPrefix = Instance.new("TextLabel")
+    velPrefix.Name = "VelPrefix"
+    velPrefix.Size = UDim2.new(0.42, 0, 1, 0) -- ocupa parte esquerda
+    velPrefix.Position = UDim2.new(0, 0, 0, 0)
+    velPrefix.BackgroundTransparency = 1
+    velPrefix.Font = Enum.Font.SourceSans
+    velPrefix.TextSize = 16
+    velPrefix.TextScaled = true
+    velPrefix.TextColor3 = COLOR_WHITE
+    velPrefix.TextStrokeTransparency = 0.7
+    velPrefix.Text = "Vel:"
+    velPrefix.TextXAlignment = Enum.TextXAlignment.Left
+    velPrefix.Parent = velFrame
+
+    local velNumber = Instance.new("TextLabel")
+    velNumber.Name = "VelNumber"
+    velNumber.Size = UDim2.new(0.58, 0, 1, 0)
+    velNumber.Position = UDim2.new(0.42, 0, 0, 0)
+    velNumber.BackgroundTransparency = 1
+    velNumber.Font = Enum.Font.SourceSans
+    velNumber.TextSize = 16
+    velNumber.TextScaled = true
+    velNumber.TextColor3 = COLOR_WHITE
+    velNumber.TextStrokeTransparency = 0.7
+    velNumber.Text = "0"
+    velNumber.TextXAlignment = Enum.TextXAlignment.Right
+    velNumber.Parent = velFrame
+
+    guiByPlayer[player] = {
+        root = root;
+        container = container;
+        nameLabel = nameLabel;
+        velPrefix = velPrefix;
+        velNumber = velNumber;
+        seat = nil;
+        vehicle = nil;
+    }
+
+    return guiByPlayer[player]
+end
+
+local function removeGuiForPlayer(player)
+    local d = guiByPlayer[player]
+    if not d then return end
+    if d.container and d.container.Parent then
+        pcall(function() d.container:Destroy() end)
+    end
+    guiByPlayer[player] = nil
+end
+
+-- Atualiza posição (usando WorldToViewportPoint) e texto das GUIs
+local Camera = Workspace.CurrentCamera
+local function updateAll(dt)
+    if not Camera then Camera = Workspace.CurrentCamera end
+
+    for player, data in pairs(guiByPlayer) do
+        if not player or not player.Parent or not data or not data.container then
+            removeGuiForPlayer(player)
+        else
+            -- Determina posição de referência: seat (preferido) ou HRP
+            local refPos
+            if data.seat and data.seat.Parent then
+                refPos = data.seat.Position + STUDS_OFFSET
+            else
+                if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                    refPos = player.Character.HumanoidRootPart.Position + STUDS_OFFSET
+                end
+            end
+
+            if refPos then
+                local onScreen, screenPoint = pcall(function() return Camera:WorldToViewportPoint(refPos) end)
+                if onScreen and screenPoint and typeof(screenPoint) == "Vector3" then
+                    local depth = screenPoint.Z
+                    if depth > 0 and (refPos - Camera.CFrame.Position).Magnitude <= MAX_DISTANCE then
+                        data.container.Visible = true
+                        -- centraliza horizontalmente
+                        local sx = screenPoint.X
+                        local sy = screenPoint.Y
+                        data.container.Position = UDim2.new(0, sx - data.container.Size.X.Offset/2, 0, sy - data.container.Size.Y.Offset/2)
+                    else
+                        data.container.Visible = false
+                    end
+                else
+                    data.container.Visible = false
+                end
+            else
+                data.container.Visible = false
+            end
+
+            -- Atualiza valor da velocidade conforme a função original enviada
+            local value = nil
+            -- chama a função (usa o character)
+            local ok, res = pcall(function() return getCarSpeedValue_fromOriginal(player.Character) end)
+            if ok and type(res) == "number" then
+                value = math.floor(res + 0.5)
+            else
+                value = 0
+            end
+
+            -- Aplica cor e emoji conforme regra
+            if value >= 1 and value <= 100 then
+                data.velNumber.TextColor3 = COLOR_GREEN
+                data.velNumber.Text = tostring(value)
+            elseif value >= 101 then
+                data.velNumber.TextColor3 = COLOR_RED
+                data.velNumber.Text = tostring(value) .. " ⚠️"
+            else
+                data.velNumber.TextColor3 = COLOR_WHITE
+                data.velNumber.Text = "0"
+            end
+        end
+    end
+end
+
+-- Periodicamente cria/removes GUIs conforme jogadores sentados
+local function refreshPlayers()
+    for _, player in ipairs(Players:GetPlayers()) do
+        local ok, seat = pcall(isPlayerSeated, player)
+        if ok and seat then
+            local d = createGuiForPlayer(player)
+            if d then
+                d.seat = seat
+                d.vehicle = getVehicleFromSeat(seat)
+            end
+        else
+            if guiByPlayer[player] then
+                removeGuiForPlayer(player)
+            end
+        end
+    end
+end
+
+-- Loop principal: refresh em intervalo e update por frame
+RunService.RenderStepped:Connect(function(dt)
+    refreshTimer = refreshTimer + dt
+    if refreshTimer >= REFRESH_INTERVAL then
+        refreshTimer = 0
+        pcall(refreshPlayers)
+    end
+    pcall(updateAll, dt)
+end)
+
+-- Limpeza ao sair
+Players.PlayerRemoving:Connect(function(p)
+    removeGuiForPlayer(p)
+end)
+
+-- Inicial
+pcall(refreshPlayers)
+print("[SpeedHUD] carregado: HUDs acima de jogadores em veículos (mostrando valor detectado).")
