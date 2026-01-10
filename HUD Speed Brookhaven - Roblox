@@ -1,0 +1,438 @@
+-- LocalScript (colocar em StarterPlayer > StarterPlayerScripts)
+-- Mostra acima de cada jogador (incluindo você) um Billboard com:
+--   Nome
+--   Vel: (valor definido no veículo OU fallback físico)
+-- Regras de cor:
+--   1-100  -> texto verde
+--   101+   -> texto vermelho + ⚠️
+-- Inclui botão DRAGGABLE para ativar/desativar o HUD (touch/PC).
+-- O HUD aparece somente para jogadores que ESTÃO DIRIGINDO (VehicleSeat.Occupant = Humanoid).
+-- Detecta NumberValue / IntValue / Attribute no veículo com "speed"/"vel" no nome e usa esse valor quando disponível.
+-- Se não houver, usa fallback físico: seat.AssemblyLinearVelocity.Magnitude (ou HRP).
+-- Atualizações por frame para posição/velocidade.
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local UserInputService = game:GetService("UserInputService")
+
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+-- Config
+local MAX_DRAW_DISTANCE = 350
+local OFFSET_ABOVE = Vector3.new(0, 3.6, 0)
+local REFRESH_SEAT_INTERVAL = 0.6 -- a cada Xs checa se players começaram/pararam de dirigir
+local SPEED_NAME_KEYWORDS = { "speed", "vel", "velocity", "velocidade" } -- procura nomes contendo essas substrings
+local PRIORITY_NAMES = { "Speed", "MaxSpeed", "VehicleSpeed", "CarSpeed", "TopSpeed", "MaxVelocity", "SpeedValue", "DriveSpeed" }
+
+-- Cores
+local COLOR_GREEN = Color3.fromRGB(76, 175, 80)
+local COLOR_RED   = Color3.fromRGB(244, 67, 54)
+local COLOR_WHITE = Color3.fromRGB(255,255,255)
+
+-- Estado
+local enabled = true
+local guiByPlayer = {} -- player -> { billboard, nameLabel, speedLabel, seat, vehicle, speedSource (table) }
+local refreshTimer = 0
+
+-- Util: determina se player está dirigindo; retorna true, seatPart
+local function isPlayerDriving(player)
+	if not player or not player.Character then return false end
+	local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then return false end
+	local seat = humanoid.SeatPart
+	if not seat then return false end
+	if not seat:IsA("VehicleSeat") then return false end
+	-- Occupant precisa ser o humano do character (evita passageiros não controlando)
+	if seat.Occupant ~= humanoid then return false end
+	return true, seat
+end
+
+-- Util: obtém model/vehicle a partir do seat (procura ancestor Model)
+local function getVehicleFromSeat(seat)
+	if not seat then return nil end
+	local node = seat
+	while node and node ~= Workspace do
+		if node:IsA("Model") then return node end
+		node = node.Parent
+	end
+	return nil
+end
+
+-- Util: procura NumberValue/IntValue em model priorizando nomes comuns e por substring
+local function findNumericValueInModel(model)
+	if not model then return nil end
+	-- prioridade por nomes comuns
+	for _,name in ipairs(PRIORITY_NAMES) do
+		local ok, v = pcall(function() return model:FindFirstChild(name, true) end)
+		if ok and v and (v:IsA("NumberValue") or v:IsA("IntValue")) then
+			return v
+		end
+	end
+	-- busca por descendentes que contenham as palavras-chave
+	for _,desc in ipairs(model:GetDescendants()) do
+		if desc:IsA("NumberValue") or desc:IsA("IntValue") then
+			local lname = desc.Name:lower()
+			for _,k in ipairs(SPEED_NAME_KEYWORDS) do
+				if string.find(lname, k) then
+					return desc
+				end
+			end
+		end
+	end
+	return nil
+end
+
+-- Util: procura atributo num model com nome contendo speed keyword
+local function findAttributeKey(model)
+	if not model or type(model.GetAttributes) ~= "function" then return nil end
+	local attrs = model:GetAttributes()
+	for k,v in pairs(attrs) do
+		if type(v) == "number" then
+			local lk = k:lower()
+			for _,key in ipairs(SPEED_NAME_KEYWORDS) do
+				if string.find(lk, key) then
+					return k
+				end
+			end
+		end
+	end
+	return nil
+end
+
+-- Cria BillboardGui simples (apenas texto) acima do personagem
+local function createBillboardForPlayer(player)
+	if guiByPlayer[player] and guiByPlayer[player].billboard and guiByPlayer[player].billboard.Parent then
+		return guiByPlayer[player]
+	end
+
+	local billboard = Instance.new("BillboardGui")
+	billboard.Name = "SpeedHUD_" .. tostring(player.UserId or player.Name)
+	billboard.Size = UDim2.new(0, 180, 0, 48)
+	billboard.StudsOffset = Vector3.new(0, 2.6, 0)
+	billboard.AlwaysOnTop = true
+	billboard.MaxDistance = MAX_DRAW_DISTANCE
+	billboard.Parent = PlayerGui -- billboard no PlayerGui via LocalScript funciona bem
+
+	local nameLabel = Instance.new("TextLabel")
+	nameLabel.Size = UDim2.new(1, -6, 0.5, 0)
+	nameLabel.Position = UDim2.new(0, 3, 0, 0)
+	nameLabel.BackgroundTransparency = 1
+	nameLabel.Font = Enum.Font.SourceSansBold
+	nameLabel.TextSize = 18
+	nameLabel.TextScaled = true
+	nameLabel.TextColor3 = COLOR_WHITE
+	nameLabel.TextStrokeTransparency = 0.7
+	nameLabel.Text = player.Name
+	nameLabel.Parent = billboard
+
+	local speedLabel = Instance.new("TextLabel")
+	speedLabel.Size = UDim2.new(1, -6, 0.5, 0)
+	speedLabel.Position = UDim2.new(0, 3, 0.5, 0)
+	speedLabel.BackgroundTransparency = 1
+	speedLabel.Font = Enum.Font.SourceSans
+	speedLabel.TextSize = 18
+	speedLabel.TextScaled = true
+	speedLabel.TextColor3 = COLOR_WHITE
+	speedLabel.TextStrokeTransparency = 0.7
+	speedLabel.Text = "Vel: 0"
+	speedLabel.Parent = billboard
+
+	guiByPlayer[player] = {
+		billboard = billboard;
+		nameLabel = nameLabel;
+		speedLabel = speedLabel;
+		seat = nil;
+		vehicle = nil;
+		speedSource = nil; -- { type="NumberValue"/"Attribute", obj=..., key=... }
+	}
+
+	return guiByPlayer[player]
+end
+
+local function removeBillboardForPlayer(player)
+	local d = guiByPlayer[player]
+	if d then
+		if d.billboard and d.billboard.Parent then
+			pcall(function() d.billboard:Destroy() end)
+		end
+		guiByPlayer[player] = nil
+	end
+end
+
+-- Detecta e retorna velocidade definida no veículo (ou nil)
+local function getDefinedSpeed(d)
+	if not d then return nil end
+	-- use cache if valid
+	if d.speedSource then
+		local s = d.speedSource
+		if s.type == "NumberValue" and s.obj and s.obj.Parent then
+			return s.obj.Value
+		elseif s.type == "Attribute" and d.vehicle and d.vehicle:GetAttribute(s.key) ~= nil then
+			return d.vehicle:GetAttribute(s.key)
+		else
+			d.speedSource = nil -- invalid cache
+		end
+	end
+
+	-- procura NumberValue/IntValue no veículo
+	if d.vehicle then
+		local nv = findNumericValueInModel(d.vehicle)
+		if nv then
+			d.speedSource = { type = "NumberValue", obj = nv }
+			return nv.Value
+		end
+
+		-- procura atributos
+		local key = findAttributeKey(d.vehicle)
+		if key then
+			d.speedSource = { type = "Attribute", key = key }
+			return d.vehicle:GetAttribute(key)
+		end
+	end
+
+	-- procura direto no seat
+	if d.seat then
+		for _,c in ipairs(d.seat:GetChildren()) do
+			if (c:IsA("NumberValue") or c:IsA("IntValue")) then
+				local ln = c.Name:lower()
+				for _,k in ipairs(SPEED_NAME_KEYWORDS) do
+					if string.find(ln, k) then
+						d.speedSource = { type = "NumberValue", obj = c }
+						return c.Value
+					end
+				end
+			end
+		end
+		-- seat attributes
+		if d.seat.GetAttributes then
+			for k,v in pairs(d.seat:GetAttributes()) do
+				if type(v) == "number" then
+					local lk = k:lower()
+					for _,key in ipairs(SPEED_NAME_KEYWORDS) do
+						if string.find(lk, key) then
+							d.speedSource = { type = "Attribute", key = k }
+							return v
+						end
+					end
+				end
+			end
+		end
+	end
+
+	return nil
+end
+
+-- Fallback: calcula velocidade física (magnitude)
+local function getPhysicalSpeedForPlayer(player, d)
+	-- prefer seat velocity
+	local velMagnitude = 0
+	local seat = d and d.seat
+	if seat and seat:IsA("BasePart") then
+		local vel = seat.AssemblyLinearVelocity or seat.Velocity or Vector3.new()
+		velMagnitude = vel.Magnitude
+	else
+		-- tentar HumanoidRootPart
+		if player.Character then
+			local hrp = player.Character:FindFirstChild("HumanoidRootPart") or player.Character:FindFirstChild("Torso")
+			if hrp then
+				local vel = hrp.AssemblyLinearVelocity or hrp.Velocity or Vector3.new()
+				velMagnitude = vel.Magnitude
+			end
+		end
+	end
+	return math.floor(velMagnitude + 0.5)
+end
+
+-- Atualiza texto e cor para um dado player
+local function updateGuiForPlayer(player, d)
+	if not d or not d.billboard then return end
+
+	-- tenta velocidade definida no veículo
+	local vehVal = getDefinedSpeed(d)
+	local displayed = nil
+	if type(vehVal) == "number" then
+		displayed = math.floor(vehVal + 0.5)
+	else
+		displayed = getPhysicalSpeedForPlayer(player, d)
+	end
+
+	-- aplica regras de cor e emoji
+	if displayed >= 1 and displayed <= 100 then
+		d.speedLabel.TextColor3 = COLOR_GREEN
+		d.speedLabel.Text = "Vel: " .. tostring(displayed)
+	elseif displayed >= 101 then
+		d.speedLabel.TextColor3 = COLOR_RED
+		d.speedLabel.Text = "Vel: " .. tostring(displayed) .. " ⚠️"
+	else
+		d.speedLabel.TextColor3 = COLOR_WHITE
+		d.speedLabel.Text = "Vel: 0"
+	end
+end
+
+-- Atualiza adornee do billboard (seta para HRP do character normalmente)
+local function updateBillboardAdornee(player, d)
+	if not d or not d.billboard then return end
+	-- prefer inserir como Adornee o HumanoidRootPart se existir, mas se o jogador estiver dirigindo preferir o seat (aparecer acima do carro)
+	if d.seat and d.seat.Parent then
+		d.billboard.Adornee = d.seat
+	elseif player.Character then
+		local hrp = player.Character:FindFirstChild("HumanoidRootPart") or player.Character:FindFirstChild("Torso")
+		if hrp then
+			d.billboard.Adornee = hrp
+		end
+	end
+end
+
+-- Varredura periódica para criar/remover billboards conforme quem estiver dirigindo
+local function refreshDrivers()
+	for _,pl in ipairs(Players:GetPlayers()) do
+		local ok, seat = pcall(isPlayerDriving, pl)
+		if ok and seat then
+			-- se estiver dirigindo, garante GUI
+			local data = createBillboardForPlayer(pl)
+			if data then
+				local vehicle = getVehicleFromSeat(seat)
+				if data.seat ~= seat then
+					data.seat = seat
+					data.vehicle = vehicle
+					data.speedSource = nil
+				end
+				updateBillboardAdornee(pl, data)
+				data.billboard.Enabled = enabled
+			end
+		else
+			-- remove GUI caso exista (não dirigir)
+			if guiByPlayer[pl] then
+				removeBillboardForPlayer(pl)
+			end
+		end
+	end
+end
+
+-- Loop principal: atualiza posições/velocidade por frame e faz refresh ocasional
+RunService.RenderStepped:Connect(function(dt)
+	if not enabled then return end
+
+	-- refresh periodic
+	refreshTimer = refreshTimer + dt
+	if refreshTimer >= REFRESH_SEAT_INTERVAL then
+		refreshTimer = 0
+		pcall(refreshDrivers)
+	end
+
+	-- update cada GUI existente
+	for pl, d in pairs(guiByPlayer) do
+		-- valida se player ainda existe
+		if not pl or not pl.Parent or not d or not d.billboard then
+			removeBillboardForPlayer(pl)
+		else
+			-- garantir adornee atualizado (caso seat/character mude)
+			updateBillboardAdornee(pl, d)
+			-- atualiza valor de velocidade
+			pcall(updateGuiForPlayer, pl, d)
+		end
+	end
+end)
+
+-- Conecta criação/removals de players para manter tabela limpa
+Players.PlayerRemoving:Connect(function(p)
+	removeBillboardForPlayer(p)
+end)
+
+-- ------------------------
+-- Botão draggable ON/OFF
+-- ------------------------
+local function createDraggableToggle()
+	-- ScreenGui para o toggle
+	local sg = Instance.new("ScreenGui")
+	sg.Name = "SpeedHUD_ToggleGui"
+	sg.ResetOnSpawn = false
+	sg.Parent = PlayerGui
+
+	local frame = Instance.new("Frame")
+	frame.Name = "ToggleFrame"
+	frame.Size = UDim2.new(0, 56, 0, 56)
+	frame.Position = UDim2.new(0.02, 0, 0.02, 0) -- canto superior esquerdo por padrão
+	frame.BackgroundTransparency = 0.15
+	frame.BackgroundColor3 = Color3.fromRGB(25,25,25)
+	frame.BorderSizePixel = 0
+	frame.AnchorPoint = Vector2.new(0,0)
+	frame.Parent = sg
+	frame.Active = true -- necessário para InputBegan ser recebido
+
+	local label = Instance.new("TextLabel")
+	label.Name = "StateLabel"
+	label.Size = UDim2.new(1, 0, 1, 0)
+	label.BackgroundTransparency = 1
+	label.Font = Enum.Font.SourceSansBold
+	label.TextSize = 20
+	label.TextColor3 = Color3.fromRGB(255,255,255)
+	label.Text = enabled and "ON" or "OFF"
+	label.TextScaled = true
+	label.Parent = frame
+
+	-- Drag support
+	local dragging = false
+	local dragInput = nil
+	local dragStart = nil
+	local startPos = nil
+
+	local function updatePosition(input)
+		local delta = input.Position - dragStart
+		frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+	end
+
+	frame.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			dragStart = input.Position
+			startPos = frame.Position
+			dragInput = input
+		end
+	end)
+	frame.InputChanged:Connect(function(input)
+		if input == dragInput then
+			updatePosition(input)
+		end
+	end)
+	UserInputService.InputChanged:Connect(function(input)
+		if dragging and input == dragInput then
+			updatePosition(input)
+		end
+	end)
+	frame.InputEnded:Connect(function(input)
+		if input == dragInput then
+			dragging = false
+			dragInput = nil
+			dragStart = nil
+			-- clamp position to screen bounds (simple)
+			local pos = frame.Position
+			local x = math.clamp(pos.X.Offset, 0, math.max(0, PlayerGui.AbsoluteSize.X - frame.AbsoluteSize.X))
+			local y = math.clamp(pos.Y.Offset, 0, math.max(0, PlayerGui.AbsoluteSize.Y - frame.AbsoluteSize.Y))
+			frame.Position = UDim2.new(0, x, 0, y)
+		end
+	end)
+
+	-- Toggle on tap/click
+	frame.InputEnded:Connect(function(input)
+		-- detect quick tap (mouse or touch) to toggle
+		if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and not dragging then
+			enabled = not enabled
+			label.Text = enabled and "ON" or "OFF"
+			-- hide/show all billboards
+			for _,d in pairs(guiByPlayer) do
+				if d and d.billboard then
+					d.billboard.Enabled = enabled
+				end
+			end
+		end
+	end)
+end
+
+-- Inicialização: cria toggle e faz primeira varredura
+createDraggableToggle()
+pcall(refreshDrivers)
+
+print("[SpeedHUD] carregado. Pressione/arraste o botão para habilitar/desabilitar.")
