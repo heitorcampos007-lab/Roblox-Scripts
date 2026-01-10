@@ -1,62 +1,48 @@
--- SpeedHUD Delta (sem botão) — inicia ATIVADO imediatamente
--- Execute pelo executor (Delta) dentro do jogo.
--- loadstring(game:HttpGet("https://raw.githubusercontent.com/SEU_USUARIO/SEU_REPO/main/SpeedHUD_Delta_no_toggle.lua"))()
-
--- ========== CONFIG ==========
-local REFRESH_INTERVAL = 0.6
-local OFFSET_STUDS = Vector3.new(0, 3.6, 0)
-local PRIORITY_NAMES = { "Speed","MaxSpeed","VehicleSpeed","CarSpeed","TopSpeed","MaxVelocity","SpeedValue","DriveSpeed" }
-local SPEED_KEYWORDS = { "speed", "vel", "velocity", "velocidade" }
-local COLOR_GREEN = Color3.fromRGB(76,175,80)
-local COLOR_RED   = Color3.fromRGB(244,67,54)
-local COLOR_WHITE = Color3.fromRGB(255,255,255)
--- ===========================
+-- LocalScript: Speed HUD (mostra a velocidade CONFIGURADA no veículo)
+-- Coloque em: StarterPlayer > StarterPlayerScripts
+-- O script mostrará, para O SEU CLIENTE, um BillboardGui acima de cada jogador
+-- que estiver sentado em um VehicleSeat (motorista ou passageiro).
+-- Exibe:
+--   Linha 1: nick (branco)
+--   Linha 2: Vel: (branco) <numero> (cor: 1-100 verde, 101+ vermelho + ⚠️)
+-- A velocidade exibida é o VALOR DEFINIDO no veículo (NumberValue / IntValue / StringValue
+-- convertível ou Attribute com nome contendo "speed"/"vel"). Se não houver campo acessível,
+-- o valor exibido será 0.
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
-local UserInputService = game:GetService("UserInputService")
 
 local LocalPlayer = Players.LocalPlayer
-if not LocalPlayer then repeat Players.PlayerAdded:Wait() until Players.LocalPlayer; LocalPlayer = Players.LocalPlayer end
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
--- executor helpers
-local gethui_f = (type(gethui) == "function") and gethui
-if not gethui_f and type(syn) == "table" and type(syn.get_hui) == "function" then gethui_f = syn.get_hui end
-local protect_gui_f = (type(syn) == "table" and type(syn.protect_gui) == "function") and syn.protect_gui
-if not protect_gui_f and type(protect_gui) == "function" then protect_gui_f = protect_gui end
+-- Config
+local MAX_DISTANCE = 300
+local STUDS_OFFSET = Vector3.new(0, 3.2, 0)
+local CHECK_INTERVAL = 0.6 -- checa quem está sentado a cada X segundos
 
-local function chooseGuiParent()
-	local pg = LocalPlayer:FindFirstChild("PlayerGui")
-	if pg and pg.Parent then return pg, "PlayerGui" end
-	if gethui_f then
-		local ok, gui = pcall(gethui_f)
-		if ok and gui then return gui, "gethui()" end
-	end
-	local ok, cg = pcall(function() return game:GetService("CoreGui") end)
-	if ok and cg then return cg, "CoreGui" end
-	return nil, "none"
-end
+local SPEED_KEYWORDS = { "speed", "vel", "velocity", "velocidade" }
+local PRIORITY_NAMES = { "Speed","MaxSpeed","VehicleSpeed","CarSpeed","TopSpeed","MaxVelocity","SpeedValue","DriveSpeed" }
 
-local GuiParent, parentSource = chooseGuiParent()
-print("[SpeedHUD] GUI parent:", parentSource)
-if protect_gui_f and GuiParent then pcall(function() protect_gui_f(GuiParent) end); print("[SpeedHUD] protect_gui aplicado") end
-if not GuiParent then warn("[SpeedHUD] Nenhum GuiParent disponível. Executor pode estar bloqueando GUIs.") end
+local COLOR_WHITE = Color3.fromRGB(255,255,255)
+local COLOR_GREEN = Color3.fromRGB(76,175,80)
+local COLOR_RED   = Color3.fromRGB(244,67,54)
 
--- estado
-local enabled = true -- começa ATIVADO
-local guiByPlayer = {}
-local vehicleData = {}
+-- Estado
+local billboards = {}  -- jogador -> { billboard, nameLabel, speedLabel, seat, vehicle, sourceCache }
+local vehicleCache = {} -- vehicleModel -> { source = { type="Child"/"Attribute"/"SeatAttr", obj/key=... } }
 
--- utilitárias
-local function isPlayerDriving(player)
+-- Utilities
+
+local function isPlayerSeated(player)
+	-- retorna true, seatPart se o jogador estiver sentado (motorista ou passageiro)
 	if not player or not player.Character then return false end
 	local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
 	if not humanoid then return false end
 	local seat = humanoid.SeatPart
 	if not seat then return false end
 	if not seat:IsA("VehicleSeat") then return false end
-	if seat.Occupant ~= humanoid then return false end
+	-- Se SeatPart existir e for VehicleSeat, consideramos sentado (inclui motorista e passageiros)
 	return true, seat
 end
 
@@ -70,299 +56,324 @@ local function getVehicleFromSeat(seat)
 	return nil
 end
 
-local function findNumericChildInModel(model)
+-- Procura valores numéricos (NumberValue/IntValue/StringValue) com prioridades e keywords
+local function findNumericChild(model)
 	if not model then return nil end
+	-- Priorizar nomes conhecidos
 	for _,name in ipairs(PRIORITY_NAMES) do
-		local ok, v = pcall(function() return model:FindFirstChild(name, true) end)
-		if ok and v and (v:IsA("NumberValue") or v:IsA("IntValue") or v:IsA("StringValue")) then return v end
+		local ok, found = pcall(function() return model:FindFirstChild(name, true) end)
+		if ok and found and (found:IsA("NumberValue") or found:IsA("IntValue") or found:IsA("StringValue")) then
+			return found
+		end
 	end
+	-- Buscar por descendentes contendo keywords
 	for _,desc in ipairs(model:GetDescendants()) do
 		if desc:IsA("NumberValue") or desc:IsA("IntValue") or desc:IsA("StringValue") then
 			local lname = desc.Name:lower()
 			for _,k in ipairs(SPEED_KEYWORDS) do
-				if string.find(lname, k) then return desc end
+				if string.find(lname, k) then
+					return desc
+				end
 			end
 		end
 	end
 	return nil
 end
 
+-- Procura atributo numérico no model com keyword no nome
 local function findAttributeKey(model)
 	if not model or type(model.GetAttributes) ~= "function" then return nil end
 	for k,v in pairs(model:GetAttributes()) do
 		if type(v) == "number" then
 			local lk = k:lower()
-			for _,key in ipairs(SPEED_KEYWORDS) do
-				if string.find(lk, key) then return k end
+			for _,kw in ipairs(SPEED_KEYWORDS) do
+				if string.find(lk, kw) then
+					return k
+				end
 			end
 		end
 	end
 	return nil
 end
 
--- monitorVehicle: detecta child/attribute e conecta DescendantAdded / AttributeChanged
+-- Monitoramento simples: tenta detectar a "fonte" de velocidade para um veículo e cacheá-la
 local function monitorVehicle(vehicle)
-	if not vehicle or not vehicle.Parent then return end
-	if vehicleData[vehicle] then return vehicleData[vehicle] end
-	local data = { source = nil, connections = {}, printedSourceInfo = false }
-	vehicleData[vehicle] = data
+	if not vehicle or not vehicle.Parent then return nil end
+	if vehicleCache[vehicle] then return vehicleCache[vehicle] end
+
+	local entry = { source = nil, conns = {} }
+	vehicleCache[vehicle] = entry
 
 	local function tryDetect()
-		local found = findNumericChildInModel(vehicle)
-		if found then data.source = { type = "ChildValue", obj = found }; data.lastFound = found; return end
-		local key = findAttributeKey(vehicle)
-		if key then data.source = { type = "Attribute", key = key }; return end
-		-- verificar seats internos
-		for _,seat in ipairs(vehicle:GetDescendants()) do
-			if seat:IsA("VehicleSeat") then
-				for _,c in ipairs(seat:GetChildren()) do
-					if (c:IsA("NumberValue") or c:IsA("IntValue") or c:IsA("StringValue")) then
-						local ln = c.Name:lower()
-						for _,k in ipairs(SPEED_KEYWORDS) do
-							if string.find(ln, k) then data.source = { type="ChildValue", obj=c }; data.lastFound=c; return end
+		-- procura child
+		local c = findNumericChild(vehicle)
+		if c then
+			entry.source = { type = "Child", obj = c }
+			return
+		end
+		-- procura atributo
+		local attrKey = findAttributeKey(vehicle)
+		if attrKey then
+			entry.source = { type = "Attribute", key = attrKey }
+			return
+		end
+		-- procurar no seat específico (caso o vehicle model não contenha diretamente)
+		for _,desc in ipairs(vehicle:GetDescendants()) do
+			if desc:IsA("VehicleSeat") then
+				-- children do seat
+				for _,ch in ipairs(desc:GetChildren()) do
+					if (ch:IsA("NumberValue") or ch:IsA("IntValue") or ch:IsA("StringValue")) then
+						local ln = ch.Name:lower()
+						for _,kw in ipairs(SPEED_KEYWORDS) do
+							if string.find(ln, kw) then
+								entry.source = { type = "Child", obj = ch }
+								return
+							end
 						end
 					end
 				end
-				if type(seat.GetAttributes) == "function" then
-					for k,v in pairs(seat:GetAttributes()) do
+				-- atributos do seat
+				if type(desc.GetAttributes) == "function" then
+					for k,v in pairs(desc:GetAttributes()) do
 						if type(v) == "number" then
 							local lk = k:lower()
 							for _,kw in ipairs(SPEED_KEYWORDS) do
-								if string.find(lk, kw) then data.source = { type="SeatAttribute", key=k, seat=seat }; return end
+								if string.find(lk, kw) then
+									entry.source = { type = "SeatAttr", key = k, seat = desc }
+									return
+								end
 							end
 						end
 					end
 				end
 			end
 		end
-		data.source = nil
+		entry.source = nil
 	end
 
-	local ok1, conn1 = pcall(function()
+	-- conectar DescendantAdded para tentar detectar se painel cria valores após spawn
+	local ok, conn = pcall(function()
 		return vehicle.DescendantAdded:Connect(function(desc)
 			if desc:IsA("NumberValue") or desc:IsA("IntValue") or desc:IsA("StringValue") then
-				local lname = desc.Name:lower()
-				for _,k in ipairs(SPEED_KEYWORDS) do
-					if string.find(lname, k) then wait(0.05); tryDetect(); return end
+				local name = desc.Name:lower()
+				for _,kw in ipairs(SPEED_KEYWORDS) do
+					if string.find(name, kw) then
+						-- pequeno delay para dar tempo do valor ser setado
+						task.delay(0.05, tryDetect)
+						return
+					end
 				end
 			end
 		end)
 	end)
-	if ok1 and conn1 then table.insert(data.connections, conn1) end
+	if ok and conn then table.insert(entry.conns, conn) end
 
+	-- conectar mudanças de atributo no model (se suportado)
 	if type(vehicle.GetAttributeChangedSignal) == "function" then
-		local ok2, conn2 = pcall(function()
+		local sOK, aconn = pcall(function()
 			return vehicle:GetAttributeChangedSignal():Connect(function(attr)
-				local lk = attr:lower()
-				for _,k in ipairs(SPEED_KEYWORDS) do if string.find(lk, k) then pcall(tryDetect) end end
+				for _,kw in ipairs(SPEED_KEYWORDS) do
+					if string.find(attr:lower(), kw) then
+						pcall(tryDetect)
+						return
+					end
+				end
 			end)
 		end)
-		if ok2 and conn2 then table.insert(data.connections, conn2) end
+		if sOK and aconn then table.insert(entry.conns, aconn) end
 	end
 
 	tryDetect()
-	return data
+	return entry
 end
 
 local function cleanupVehicle(vehicle)
-	local d = vehicleData[vehicle]
-	if not d then return end
-	for _,c in ipairs(d.connections) do pcall(function() c:Disconnect() end) end
-	vehicleData[vehicle] = nil
+	local e = vehicleCache[vehicle]
+	if not e then return end
+	for _,c in ipairs(e.conns) do
+		pcall(function() c:Disconnect() end)
+	end
+	vehicleCache[vehicle] = nil
 end
 
--- cria billboard
-local function createBillboardForPlayer(player, seat)
-	if not GuiParent then return nil, "GuiParent nil" end
-	if guiByPlayer[player] and guiByPlayer[player].billboard and guiByPlayer[player].billboard.Parent then
-		local g = guiByPlayer[player]; g.billboard.Adornee = seat or g.billboard.Adornee; return g, "reused"
+-- Cria BillboardGui para um jogador
+local function createBillboard(player)
+	if billboards[player] and billboards[player].billboard and billboards[player].billboard.Parent then
+		return billboards[player]
 	end
 
-	local ok, b = pcall(function()
-		local bb = Instance.new("BillboardGui")
-		bb.Name = "SpeedHUD_" .. tostring(player.UserId or player.Name)
-		bb.Size = UDim2.new(0,180,0,44)
-		bb.StudsOffset = OFFSET_STUDS
-		bb.AlwaysOnTop = true
-		bb.MaxDistance = 350
-		bb.Adornee = seat
-		bb.Parent = GuiParent
-		return bb
-	end)
-	if not ok or not b then return nil, ("failed_create:"..tostring(b)) end
+	local billboard = Instance.new("BillboardGui")
+	billboard.Name = "SpeedHUD_" .. tostring(player.UserId or player.Name)
+	billboard.Size = UDim2.new(0, 160, 0, 44)
+	billboard.StudsOffset = STUDS_OFFSET
+	billboard.AlwaysOnTop = true
+	billboard.MaxDistance = MAX_DISTANCE
+	billboard.Parent = PlayerGui
 
 	local nameLabel = Instance.new("TextLabel")
+	nameLabel.Name = "Name"
+	nameLabel.Size = UDim2.new(1, -6, 0.5, 0)
+	nameLabel.Position = UDim2.new(0, 3, 0, 0)
 	nameLabel.BackgroundTransparency = 1
-	nameLabel.Size = UDim2.new(1,-6,0.5,0)
-	nameLabel.Position = UDim2.new(0,3,0,0)
 	nameLabel.Font = Enum.Font.SourceSansBold
-	nameLabel.TextSize = 18; nameLabel.TextScaled = true
-	nameLabel.TextColor3 = COLOR_WHITE; nameLabel.TextStrokeTransparency = 0.7
+	nameLabel.TextSize = 18
+	nameLabel.TextScaled = true
+	nameLabel.TextColor3 = COLOR_WHITE
+	nameLabel.TextStrokeTransparency = 0.7
 	nameLabel.Text = player.DisplayName or player.Name
-	nameLabel.Parent = b
+	nameLabel.Parent = billboard
 
 	local speedLabel = Instance.new("TextLabel")
+	speedLabel.Name = "Speed"
+	speedLabel.Size = UDim2.new(1, -6, 0.5, 0)
+	speedLabel.Position = UDim2.new(0, 3, 0.5, 0)
 	speedLabel.BackgroundTransparency = 1
-	speedLabel.Size = UDim2.new(1,-6,0.5,0)
-	speedLabel.Position = UDim2.new(0,3,0.5,0)
 	speedLabel.Font = Enum.Font.SourceSans
-	speedLabel.TextSize = 18; speedLabel.TextScaled = true
-	speedLabel.TextColor3 = COLOR_WHITE; speedLabel.TextStrokeTransparency = 0.7
+	speedLabel.TextSize = 18
+	speedLabel.TextScaled = true
+	speedLabel.TextColor3 = COLOR_WHITE
+	speedLabel.TextStrokeTransparency = 0.7
 	speedLabel.Text = "Vel: 0"
-	speedLabel.Parent = b
+	speedLabel.Parent = billboard
 
-	guiByPlayer[player] = { billboard = b; nameLabel = nameLabel; speedLabel = speedLabel; seat = seat; vehicle = seat and getVehicleFromSeat(seat) or nil; visible = true }
-	if guiByPlayer[player].vehicle then monitorVehicle(guiByPlayer[player].vehicle) end
-	return guiByPlayer[player], "created"
+	billboards[player] = {
+		billboard = billboard;
+		nameLabel = nameLabel;
+		speedLabel = speedLabel;
+		seat = nil;
+		vehicle = nil;
+		sourceCache = nil;
+	}
+
+	return billboards[player]
 end
 
-local function removeBillboardForPlayer(player)
-	local d = guiByPlayer[player]
+local function removeBillboard(player)
+	local d = billboards[player]
 	if not d then return end
-	if d.billboard and d.billboard.Parent then pcall(function() d.billboard:Destroy() end) end
-	guiByPlayer[player] = nil
+	if d.billboard and d.billboard.Parent then
+		pcall(function() d.billboard:Destroy() end)
+	end
+	billboards[player] = nil
 end
 
-local function getVehicleDefinedSpeed(d)
-	if not d or not d.vehicle then return nil, nil end
-	local vd = vehicleData[d.vehicle]
-	if vd and vd.source then
-		local s = vd.source
-		if s.type == "ChildValue" and s.obj and s.obj.Parent then
-			if s.obj:IsA("NumberValue") or s.obj:IsA("IntValue") then return tonumber(s.obj.Value), ("Child:%s"):format(s.obj:GetFullName()) end
-			if s.obj:IsA("StringValue") then local n = tonumber(s.obj.Value); if n then return n, ("ChildStr:%s"):format(s.obj:GetFullName()) end end
+-- Obtém o valor configurado no veículo (se disponível). Retorna number or nil.
+local function getVehicleConfiguredSpeed(d)
+	if not d or not d.vehicle then return nil end
+	local vEntry = vehicleCache[d.vehicle]
+	if vEntry and vEntry.source then
+		local s = vEntry.source
+		if s.type == "Child" and s.obj and s.obj.Parent then
+			local obj = s.obj
+			if obj:IsA("NumberValue") or obj:IsA("IntValue") then
+				return tonumber(obj.Value)
+			elseif obj:IsA("StringValue") then
+				return tonumber(obj.Value)
+			end
 		elseif s.type == "Attribute" and d.vehicle:GetAttribute(s.key) ~= nil then
-			return d.vehicle:GetAttribute(s.key), ("Attribute:%s"):format(s.key)
-		elseif s.type == "SeatAttribute" and s.seat and s.seat:GetAttribute(s.key) ~= nil then
-			return s.seat:GetAttribute(s.key), ("SeatAttribute:%s"):format(s.key)
+			return tonumber(d.vehicle:GetAttribute(s.key))
+		elseif s.type == "SeatAttr" and s.seat and s.seat:GetAttribute(s.key) ~= nil then
+			return tonumber(s.seat:GetAttribute(s.key))
 		end
 	end
-	-- fallback quick search
-	local direct = findNumericChildInModel(d.vehicle) or (d.seat and (function()
-		for _,c in ipairs(d.seat:GetChildren()) do
-			if (c:IsA("NumberValue") or c:IsA("IntValue") or c:IsA("StringValue")) then
-				local ln = c.Name:lower()
-				for _,k in ipairs(SPEED_KEYWORDS) do if string.find(ln, k) then if c:IsA("StringValue") then local n = tonumber(c.Value); if n then return c end else return c end end end
+
+	-- tentativa rápida direta (caso monitorVehicle não tenha detectado)
+	local direct = findNumericChild(d.vehicle)
+	if direct then
+		if direct:IsA("StringValue") then return tonumber(direct.Value) end
+		return tonumber(direct.Value)
+	end
+
+	return nil
+end
+
+-- Atualiza o texto do GUI para um jogador
+local function updateGui(player, d)
+	if not d or not d.billboard then return end
+	-- name já definido; only update speed part
+	local val = getVehicleConfiguredSpeed(d)
+	local displayed = tonumber(val) or 0
+
+	-- montar string com cores
+	-- Nome e "Vel:" ficam brancos; o número recebe cor conforme regra.
+	local textNumber = tostring(displayed)
+	if displayed >= 1 and displayed <= 100 then
+		d.speedLabel.TextColor3 = COLOR_GREEN
+		d.speedLabel.Text = "Vel: " .. textNumber
+	elseif displayed >= 101 then
+		d.speedLabel.TextColor3 = COLOR_RED
+		d.speedLabel.Text = "Vel: " .. textNumber .. " ⚠️"
+	else
+		d.speedLabel.TextColor3 = COLOR_WHITE
+		d.speedLabel.Text = "Vel: 0"
+	end
+end
+
+-- Atualiza adornee (onde a billboard fica presa) e referências vehicle/seat
+local function setAdorneeForPlayer(player, d, seat)
+	if not d or not d.billboard then return end
+	d.seat = seat
+	-- preferir prender ao seat (mostra acima do carro); se não houver, prender no HRP
+	if seat and seat.Parent then
+		d.billboard.Adornee = seat
+		d.vehicle = getVehicleFromSeat(seat)
+	else
+		d.billboard.Adornee = nil
+		if player.Character then
+			local hrp = player.Character:FindFirstChild("HumanoidRootPart") or player.Character:FindFirstChild("Torso")
+			if hrp then
+				d.billboard.Adornee = hrp
+				d.vehicle = nil
 			end
 		end
-		return nil
-	end)())
-	if direct then
-		if direct:IsA("StringValue") then local n = tonumber(direct.Value); if n then return n, ("DirectStr:%s"):format(direct:GetFullName()) end
-		else return tonumber(direct.Value), ("DirectChild:%s"):format(direct:GetFullName()) end
 	end
-	return nil, nil
-end
-
-local function getPhysicalSpeedForSeat(seat)
-	if not seat then return 0 end
-	local vel = seat.AssemblyLinearVelocity or seat.Velocity or Vector3.new()
-	return math.floor(vel.Magnitude + 0.5)
-end
-
-local function updateGuiForPlayer(player, d)
-	if not d or not d.billboard then return end
-	local displayed = 0
-	local ok, vehVal, desc = pcall(function() return getVehicleDefinedSpeed(d) end)
-	if ok and vehVal and type(vehVal) == "number" then displayed = math.floor(vehVal + 0.5) else displayed = getPhysicalSpeedForSeat(d.seat) end
-	if displayed >= 1 and displayed <= 100 then d.speedLabel.TextColor3 = COLOR_GREEN; d.speedLabel.Text = "Vel: " .. tostring(displayed)
-	elseif displayed >= 101 then d.speedLabel.TextColor3 = COLOR_RED; d.speedLabel.Text = "Vel: " .. tostring(displayed) .. " ⚠️"
-	else d.speedLabel.TextColor3 = COLOR_WHITE; d.speedLabel.Text = "Vel: 0" end
-
-	-- debug print uma vez por vehicle
-	if d.vehicle and vehicleData[d.vehicle] and not vehicleData[d.vehicle].printedSourceInfo then
-		local vd = vehicleData[d.vehicle]; vehicleData[d.vehicle].printedSourceInfo = true
-		if vd.source then print(("[SpeedHUD] Fonte do veículo %s: %s"):format(d.vehicle:GetFullName(), tostring(vd.source.type == "ChildValue" and vd.source.obj:GetFullName() or (vd.source.key or "unknown"))))
-		else print(("[SpeedHUD] Veículo %s: nenhuma fonte detectada (usando físico)"):format(d.vehicle:GetFullName())) end
-	end
-end
-
-local function ensureRefsForPlayer(player, d, seat)
-	if not d then return end
-	d.seat = seat
-	d.billboard.Adornee = seat
-	d.vehicle = seat and getVehicleFromSeat(seat) or nil
+	-- monitorar vehicle se existir
 	if d.vehicle then monitorVehicle(d.vehicle) end
 end
 
--- Refresh drivers (cria/destroi)
-local function refreshDrivers()
-	for _,pl in ipairs(Players:GetPlayers()) do
-		local ok, seat = pcall(isPlayerDriving, pl)
+-- Periodicamente cria/removes billboards conforme jogadores sentados
+local refreshTimer = 0
+local function refreshAllPlayers()
+	for _,player in ipairs(Players:GetPlayers()) do
+		local ok, seat = pcall(isPlayerSeated, player)
 		if ok and seat then
-			local d, reason = createBillboardForPlayer(pl, seat)
-			if d then ensureRefsForPlayer(pl, d, seat); if d.billboard then d.billboard.Enabled = enabled end end
-		else
-			if guiByPlayer[pl] then removeBillboardForPlayer(pl) end
-		end
-	end
-	for veh,vd in pairs(vehicleData) do if not veh.Parent then cleanupVehicle(veh) end end
-end
-
--- activateImmediate: cria HUDs já ao executar
-local function activateImmediate()
-	print("[SpeedHUD] Ativando HUDs: varredura imediata...")
-	if not GuiParent then warn("[SpeedHUD] GuiParent nil — HUDs podem não ser criados") end
-	for _,pl in ipairs(Players:GetPlayers()) do
-		local ok, seat = pcall(isPlayerDriving, pl)
-		if ok and seat then
-			local d, reason = createBillboardForPlayer(pl, seat)
+			local d = createBillboard(player)
 			if d then
-				ensureRefsForPlayer(pl, d, seat)
-				if d.billboard then d.billboard.Enabled = true end
-				print(("[SpeedHUD] HUD criado para %s (seat: %s) -> %s"):format(pl.Name, tostring(seat:GetFullName()), tostring(reason)))
-			else
-				print(("[SpeedHUD] Não foi possível criar HUD para %s (reason: %s)"):format(pl.Name, tostring(reason)))
+				setAdorneeForPlayer(player, d, seat)
+				d.billboard.Enabled = true
 			end
 		else
-			print(("[SpeedHUD] %s não está dirigindo ou erro: %s"):format(pl.Name, tostring(seat)))
-			if guiByPlayer[pl] then removeBillboardForPlayer(pl) end
+			-- não sentado -> remover
+			if billboards[player] then removeBillboard(player) end
 		end
+	end
+
+	-- limpar vehicleCache de modelos removidos
+	for veh,_ in pairs(vehicleCache) do
+		if not veh.Parent then cleanupVehicle(veh) end
 	end
 end
 
--- loop principal
-local refreshTimer = 0
+-- Loop principal: check periodic + update every frame (but only update display if player has GUI)
 RunService.RenderStepped:Connect(function(dt)
 	refreshTimer = refreshTimer + dt
-	if refreshTimer >= REFRESH_INTERVAL then refreshTimer = 0; pcall(refreshDrivers) end
-	if not enabled then return end
-	for pl,d in pairs(guiByPlayer) do pcall(updateGuiForPlayer, pl, d) end
+	if refreshTimer >= CHECK_INTERVAL then
+		refreshTimer = 0
+		pcall(refreshAllPlayers)
+	end
+
+	-- atualiza todos os guis existentes (apenas mostra valor que foi colocado no veículo)
+	for pl, d in pairs(billboards) do
+		pcall(updateGui, pl, d)
+	end
 end)
 
-Players.PlayerRemoving:Connect(function(p) removeBillboardForPlayer(p) end)
+-- Clean-up ao sair
+Players.PlayerRemoving:Connect(function(p)
+	if billboards[p] then removeBillboard(p) end
+end)
 
--- notificação visual curta (opcional)
-local function showNotification(text, timeSec)
-	if not GuiParent then return end
-	local ok, sg = pcall(function()
-		local s = Instance.new("ScreenGui")
-		s.Name = "SpeedHUD_Notice"
-		s.ResetOnSpawn = false
-		s.Parent = GuiParent
-		return s
-	end)
-	if not ok or not sg then return end
-	local frame = Instance.new("Frame")
-	frame.Size = UDim2.new(0,220,0,40)
-	frame.Position = UDim2.new(0.5, -110, 0.05, 0)
-	frame.BackgroundColor3 = Color3.fromRGB(25,25,25)
-	frame.BackgroundTransparency = 0.2
-	frame.BorderSizePixel = 0
-	frame.Parent = sg
-	local label = Instance.new("TextLabel")
-	label.Size = UDim2.new(1,0,1,0)
-	label.BackgroundTransparency = 1
-	label.Font = Enum.Font.SourceSansBold
-	label.TextSize = 18
-	label.TextColor3 = Color3.fromRGB(255,255,255)
-	label.Text = text
-	label.Parent = frame
-	spawn(function() wait(timeSec or 1.6); pcall(function() sg:Destroy() end) end)
-end
-
--- inicialização imediata
-pcall(refreshDrivers)
-activateImmediate()
-showNotification("SpeedHUD: ON", 1.6)
-print("[SpeedHUD] iniciado e ATIVADO (HUDs devem aparecer para motoristas).")
+-- Inicial
+-- primeira varredura imediata
+pcall(refreshAllPlayers)
+print("[SpeedHUD] carregado: mostrando velocidade configurada nos veículos (se acessível).")
