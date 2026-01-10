@@ -1,9 +1,8 @@
 --[[
-🔥 Brookhaven Speed Monitor – Liga de Kart
-Detecta a velocidade configurada do carro de todos os jogadores
-Mostra alerta se alguém estiver acima do limite (100)
-Botão ON/OFF arrastável
+🔥 Brookhaven Speed Monitor – Detecta cada jogador separadamente
 Por Heitor
+Mostra a velocidade configurada do carro de cada jogador separadamente
+Botão ON/OFF arrastável
 ]]
 
 local Players = game:GetService("Players")
@@ -84,17 +83,19 @@ end
 
 Players.PlayerAdded:Connect(addPlayer)
 
--- Função para pegar velocidade configurada do carro
+-- Função para pegar velocidade configurada do carro de um jogador específico
 local function getConfiguredSpeed(character)
     if not character then return 0 end
     local humanoid = character:FindFirstChildWhichIsA("Humanoid")
     if not humanoid then return 0 end
     local seat = humanoid.SeatPart
     if not seat then return 0 end
+
+    -- Garantir que estamos pegando o modelo do carro desse seat específico
     local carModel = seat:FindFirstAncestorWhichIsA("Model")
     if not carModel then return 0 end
 
-    -- Procurar NumberValue que contenha "speed" no nome
+    -- Procurar NumberValue de speed dentro **somente desse carro**
     for _, obj in ipairs(carModel:GetDescendants()) do
         if obj:IsA("NumberValue") and obj.Name:lower():find("speed") then
             return obj.Value
@@ -113,9 +114,10 @@ RunService.RenderStepped:Connect(function()
             bb.Enabled = true
             bb.Adornee = player.Character:FindFirstChild("Head") or player.Character:FindFirstChild("HumanoidRootPart")
 
+            -- Velocidade específica deste jogador
             local speed = getConfiguredSpeed(player.Character)
 
-            -- Atualizar texto e cores
+            -- Atualizar cores e texto
             if speed <= 100 then
                 velLabel.TextColor3 = Color3.fromRGB(0,255,0) -- verde
                 velLabel.Text = "Vel: "..speed
