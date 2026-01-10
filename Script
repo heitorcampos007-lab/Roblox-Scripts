@@ -1,15 +1,15 @@
 --[[
-🔥 Brookhaven Driver Speed Monitor – Só motoristas
-Por Heitor
-Mostra a velocidade configurada apenas do jogador que está dirigindo
+🔥 Brookhaven Driver Speed Monitor – Corrigido
+Detecta a velocidade configurada do carro de cada motorista separadamente
 Botão ON/OFF arrastável
+Por Heitor
 ]]
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
--- GUI principal
+-- Criar GUI principal
 local gui = Instance.new("ScreenGui")
 gui.Name = "DriverSpeedMonitorGUI"
 gui.ResetOnSpawn = false
@@ -82,7 +82,7 @@ for _, player in ipairs(Players:GetPlayers()) do
 end
 Players.PlayerAdded:Connect(addPlayer)
 
--- Função para pegar velocidade configurada do motorista
+-- Função para pegar a velocidade configurada do motorista
 local function getDriverSpeed(character)
     if not character then return 0 end
     local humanoid = character:FindFirstChildWhichIsA("Humanoid")
@@ -90,12 +90,12 @@ local function getDriverSpeed(character)
     local seat = humanoid.SeatPart
     if not seat then return 0 end
 
-    -- Checa se o jogador está realmente dirigindo (Driver)
+    -- Somente se o jogador estiver dirigindo
     if seat:IsA("VehicleSeat") and seat.Occupant == humanoid then
         local carModel = seat:FindFirstAncestorWhichIsA("Model")
         if not carModel then return 0 end
 
-        -- Procurar NumberValue chamado "speed" dentro deste carro
+        -- Pega apenas o NumberValue do carro deste motorista específico
         for _, obj in ipairs(carModel:GetDescendants()) do
             if obj:IsA("NumberValue") and obj.Name:lower():find("speed") then
                 return obj.Value
@@ -112,7 +112,6 @@ RunService.RenderStepped:Connect(function()
         local velLabel = data.velLabel
 
         if enabled and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            -- Velocidade somente se estiver dirigindo
             local speed = getDriverSpeed(player.Character)
 
             if speed > 0 then
