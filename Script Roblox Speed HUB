@@ -1,12 +1,10 @@
--- SpeedHUD LocalScript
--- Coloque em StarterPlayer > StarterPlayerScripts
--- Mostra um GUI (Billboard) acima de cada jogador que estiver dentro de um VehicleSeat (incluindo você).
--- Linha 1: Nick (branco)
--- Linha 2: "Vel:" (branco) + número da velocidade (verde 1-100, vermelho 101+ com ⚠️)
--- A leitura da "velocidade colocada no veículo" usa a mesma lógica do seu script original:
---   procura NumberValue cujo nome contenha "speed" no model do carro e só retorna quando
---   obj.Value > 0 e a condição temporal `tick() % 1.3 > 0.15` for satisfeita.
--- Se não encontrar / condição não satisfeita, exibe 0.
+-- LocalScript: Speed HUD (sem condição temporal)
+-- Coloque em StarterPlayer -> StarterPlayerScripts
+-- Mostra acima de cada jogador sentado num VehicleSeat:
+-- Linha1: nick (branco)
+-- Linha2: "Vel:" (branco) + número (1-100 verde, 101+ vermelho + ⚠️)
+-- Lê NumberValue/IntValue/StringValue (convertível) ou Attribute cujo nome contenha "speed"/"vel".
+-- Se não encontrar, mostra 0.
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -14,259 +12,350 @@ local Workspace = game:GetService("Workspace")
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local Camera = Workspace:WaitForChild("CurrentCamera")
 
 -- Config
-local REFRESH_INTERVAL = 0.6   -- checa jogadores sentados a cada X segundos (cria/remove GUIs)
+local CHECK_INTERVAL = 0.6
 local MAX_DISTANCE = 350
-local STUDS_OFFSET = Vector3.new(0, 3.2, 0)
+local OFFSET = Vector3.new(0, 3.2, 0)
+local PRIORITY_NAMES = { "Speed","MaxSpeed","VehicleSpeed","CarSpeed","TopSpeed","MaxVelocity","SpeedValue","DriveSpeed" }
+local SPEED_KEYWORDS = { "speed", "vel", "velocity", "velocidade" }
 
 local COLOR_WHITE = Color3.fromRGB(255,255,255)
 local COLOR_GREEN = Color3.fromRGB(76,175,80)
 local COLOR_RED   = Color3.fromRGB(244,67,54)
 
--- Tabelas
-local guiByPlayer = {}   -- player -> { root = ScreenGui, container = Frame, nameLabel, velPrefix, velNumber, seat, vehicle }
+-- Estado
+local rootGui -- ScreenGui root
+local guiByPlayer = {}    -- player -> { container, nameLabel, speedLabel, seat, vehicle }
+local vehicleCache = {}   -- vehicleModel -> { source = {type, obj/key}, conns = {} }
 local refreshTimer = 0
 
--- === Função original adaptada (retorna número ou nil) ===
-local function getCarSpeedValue_fromOriginal(character)
-    if not character then return nil end
-
-    local humanoid = character:FindFirstChildWhichIsA("Humanoid")
-    if not humanoid then return nil end
-
-    local seat = humanoid.SeatPart
-    if not seat then return nil end
-
-    local carModel = seat:FindFirstAncestorWhichIsA("Model")
-    if not carModel then return nil end
-
-    for _, obj in ipairs(carModel:GetDescendants()) do
-        if obj:IsA("NumberValue") and obj.Name:lower():find("speed") then
-            if obj.Value > 0 and tick() % 1.3 > 0.15 then
-                return obj.Value
-            end
-        end
-    end
-
-    return nil
-end
--- ========================================================
-
--- Util: verifica se player está sentado em VehicleSeat (qualquer ocupante)
+-- Helpers
 local function isPlayerSeated(player)
-    if not player or not player.Character then return false end
-    local humanoid = player.Character:FindFirstChildWhichIsA("Humanoid")
-    if not humanoid then return false end
-    local seat = humanoid.SeatPart
-    if not seat then return false end
-    if not seat:IsA("VehicleSeat") then return false end
-    return true, seat
+	if not player or not player.Character then return false end
+	local hum = player.Character:FindFirstChildOfClass("Humanoid")
+	if not hum then return false end
+	local seat = hum.SeatPart
+	if not seat then return false end
+	if not seat:IsA("VehicleSeat") then return false end
+	return true, seat
 end
 
 local function getVehicleFromSeat(seat)
-    if not seat then return nil end
-    local node = seat
-    while node and node ~= Workspace do
-        if node:IsA("Model") then return node end
-        node = node.Parent
-    end
-    return nil
+	if not seat then return nil end
+	local node = seat
+	while node and node ~= Workspace do
+		if node:IsA("Model") then return node end
+		node = node.Parent
+	end
+	return nil
 end
 
--- Cria GUI para jogador (Billboard usando ScreenGui + Adornee = seat/HRP)
+local function stringContainsKeyword(name)
+	local ln = name:lower()
+	for _,k in ipairs(SPEED_KEYWORDS) do
+		if string.find(ln, k, 1, true) then return true end
+	end
+	return false
+end
+
+local function findNumericChild(model)
+	if not model then return nil end
+	-- priority exact names
+	for _,n in ipairs(PRIORITY_NAMES) do
+		local ok, v = pcall(function() return model:FindFirstChild(n, true) end)
+		if ok and v and (v:IsA("NumberValue") or v:IsA("IntValue") or v:IsA("StringValue")) then
+			return v
+		end
+	end
+	-- search descendants by keyword
+	for _,desc in ipairs(model:GetDescendants()) do
+		if (desc:IsA("NumberValue") or desc:IsA("IntValue") or desc:IsA("StringValue")) and stringContainsKeyword(desc.Name) then
+			return desc
+		end
+	end
+	return nil
+end
+
+local function findAttributeKey(model)
+	if not model or type(model.GetAttributes) ~= "function" then return nil end
+	for k,v in pairs(model:GetAttributes()) do
+		if type(v) == "number" and stringContainsKeyword(k) then
+			return k
+		end
+	end
+	return nil
+end
+
+-- Detecta e cacheia a fonte de velocidade para um veículo
+local function monitorVehicle(vehicle)
+	if not vehicle or not vehicle.Parent then return nil end
+	if vehicleCache[vehicle] then return vehicleCache[vehicle] end
+
+	local entry = { source = nil, conns = {} }
+	vehicleCache[vehicle] = entry
+
+	local function tryDetect()
+		-- model children
+		local c = findNumericChild(vehicle)
+		if c then entry.source = { type = "Child", obj = c }; return end
+		-- model attributes
+		local ak = findAttributeKey(vehicle)
+		if ak then entry.source = { type = "Attribute", key = ak }; return end
+		-- seat-level search
+		for _,desc in ipairs(vehicle:GetDescendants()) do
+			if desc:IsA("VehicleSeat") then
+				for _,ch in ipairs(desc:GetChildren()) do
+					if (ch:IsA("NumberValue") or ch:IsA("IntValue") or ch:IsA("StringValue")) and stringContainsKeyword(ch.Name) then
+						entry.source = { type = "SeatChild", obj = ch, seat = desc }; return
+					end
+				end
+				if type(desc.GetAttributes) == "function" then
+					for k,v in pairs(desc:GetAttributes()) do
+						if type(v) == "number" and stringContainsKeyword(k) then
+							entry.source = { type = "SeatAttribute", key = k, seat = desc }; return
+						end
+					end
+				end
+			end
+		end
+		entry.source = nil
+	end
+
+	-- listen for dynamic additions/attribute changes
+	local ok1, conn1 = pcall(function()
+		return vehicle.DescendantAdded:Connect(function(desc)
+			if desc:IsA("NumberValue") or desc:IsA("IntValue") or desc:IsA("StringValue") then
+				if stringContainsKeyword(desc.Name) then
+					task.delay(0.05, tryDetect)
+				end
+			end
+		end)
+	end)
+	if ok1 and conn1 then table.insert(entry.conns, conn1) end
+
+	if type(vehicle.GetAttributeChangedSignal) == "function" then
+		local ok2, conn2 = pcall(function()
+			return vehicle:GetAttributeChangedSignal():Connect(function(attr)
+				if stringContainsKeyword(attr) then pcall(tryDetect) end
+			end)
+		end)
+		if ok2 and conn2 then table.insert(entry.conns, conn2) end
+	end
+
+	tryDetect()
+	return entry
+end
+
+local function cleanupVehicle(vehicle)
+	local e = vehicleCache[vehicle]
+	if not e then return end
+	for _,c in ipairs(e.conns) do pcall(function() c:Disconnect() end) end
+	vehicleCache[vehicle] = nil
+end
+
+-- GUI creation
+local function ensureRootGui()
+	if rootGui and rootGui.Parent then return rootGui end
+	local r = PlayerGui:FindFirstChild("SpeedHUD_Root")
+	if r then rootGui = r; return rootGui end
+	rootGui = Instance.new("ScreenGui")
+	rootGui.Name = "SpeedHUD_Root"
+	rootGui.ResetOnSpawn = false
+	rootGui.Parent = PlayerGui
+	return rootGui
+end
+
 local function createGuiForPlayer(player)
-    -- Reaproveita se já existe
-    if guiByPlayer[player] and guiByPlayer[player].container and guiByPlayer[player].container.Parent then
-        return guiByPlayer[player]
-    end
+	if guiByPlayer[player] and guiByPlayer[player].container and guiByPlayer[player].container.Parent then return guiByPlayer[player] end
+	local root = ensureRootGui()
+	if not root then return nil end
 
-    -- Root ScreenGui (um por script) para manter organização
-    local root = PlayerGui:FindFirstChild("SpeedHUD_Root")
-    if not root then
-        root = Instance.new("ScreenGui")
-        root.Name = "SpeedHUD_Root"
-        root.ResetOnSpawn = false
-        root.Parent = PlayerGui
-    end
+	local container = Instance.new("Frame")
+	container.Name = "SpeedHUD_" .. tostring(player.UserId or player.Name)
+	container.Size = UDim2.new(0, 200, 0, 44)
+	container.BackgroundTransparency = 1
+	container.BorderSizePixel = 0
+	container.Parent = root
 
-    -- Container (Frame) posicionado via WorldToViewportPoint (será movido cada frame)
-    local container = Instance.new("Frame")
-    container.Name = "SpeedHUD_" .. tostring(player.UserId or player.Name)
-    container.Size = UDim2.new(0, 200, 0, 44)
-    container.BackgroundTransparency = 1
-    container.BorderSizePixel = 0
-    container.Parent = root
+	local nameLabel = Instance.new("TextLabel")
+	nameLabel.Size = UDim2.new(1, -6, 0.5, 0)
+	nameLabel.Position = UDim2.new(0, 3, 0, 0)
+	nameLabel.BackgroundTransparency = 1
+	nameLabel.Font = Enum.Font.SourceSansBold
+	nameLabel.TextSize = 18
+	nameLabel.TextScaled = true
+	nameLabel.TextColor3 = COLOR_WHITE
+	nameLabel.TextStrokeTransparency = 0.7
+	nameLabel.Text = player.DisplayName or player.Name
+	nameLabel.Parent = container
 
-    -- Line 1: Nick (branco)
-    local nameLabel = Instance.new("TextLabel")
-    nameLabel.Name = "Name"
-    nameLabel.Size = UDim2.new(1, -6, 0.5, 0)
-    nameLabel.Position = UDim2.new(0, 3, 0, 0)
-    nameLabel.BackgroundTransparency = 1
-    nameLabel.Font = Enum.Font.SourceSansBold
-    nameLabel.TextSize = 18
-    nameLabel.TextScaled = true
-    nameLabel.TextColor3 = COLOR_WHITE
-    nameLabel.TextStrokeTransparency = 0.7
-    nameLabel.Text = player.DisplayName or player.Name
-    nameLabel.Parent = container
+	local velFrame = Instance.new("Frame")
+	velFrame.Size = UDim2.new(1, -6, 0.5, 0)
+	velFrame.Position = UDim2.new(0, 3, 0.5, 0)
+	velFrame.BackgroundTransparency = 1
+	velFrame.Parent = container
 
-    -- Line 2: "Vel:" (branco) + number (colored) -> usamos dois TextLabels lado a lado
-    local velFrame = Instance.new("Frame")
-    velFrame.Name = "VelFrame"
-    velFrame.Size = UDim2.new(1, -6, 0.5, 0)
-    velFrame.Position = UDim2.new(0, 3, 0.5, 0)
-    velFrame.BackgroundTransparency = 1
-    velFrame.Parent = container
+	local velPrefix = Instance.new("TextLabel")
+	velPrefix.Size = UDim2.new(0.42, 0, 1, 0)
+	velPrefix.Position = UDim2.new(0, 0, 0, 0)
+	velPrefix.BackgroundTransparency = 1
+	velPrefix.Font = Enum.Font.SourceSans
+	velPrefix.TextSize = 16
+	velPrefix.TextScaled = true
+	velPrefix.TextColor3 = COLOR_WHITE
+	velPrefix.TextStrokeTransparency = 0.7
+	velPrefix.Text = "Vel:"
+	velPrefix.TextXAlignment = Enum.TextXAlignment.Left
+	velPrefix.Parent = velFrame
 
-    local velPrefix = Instance.new("TextLabel")
-    velPrefix.Name = "VelPrefix"
-    velPrefix.Size = UDim2.new(0.42, 0, 1, 0) -- ocupa parte esquerda
-    velPrefix.Position = UDim2.new(0, 0, 0, 0)
-    velPrefix.BackgroundTransparency = 1
-    velPrefix.Font = Enum.Font.SourceSans
-    velPrefix.TextSize = 16
-    velPrefix.TextScaled = true
-    velPrefix.TextColor3 = COLOR_WHITE
-    velPrefix.TextStrokeTransparency = 0.7
-    velPrefix.Text = "Vel:"
-    velPrefix.TextXAlignment = Enum.TextXAlignment.Left
-    velPrefix.Parent = velFrame
+	local velNumber = Instance.new("TextLabel")
+	velNumber.Size = UDim2.new(0.58, 0, 1, 0)
+	velNumber.Position = UDim2.new(0.42, 0, 0, 0)
+	velNumber.BackgroundTransparency = 1
+	velNumber.Font = Enum.Font.SourceSans
+	velNumber.TextSize = 16
+	velNumber.TextScaled = true
+	velNumber.TextColor3 = COLOR_WHITE
+	velNumber.TextStrokeTransparency = 0.7
+	velNumber.Text = "0"
+	velNumber.TextXAlignment = Enum.TextXAlignment.Right
+	velNumber.Parent = velFrame
 
-    local velNumber = Instance.new("TextLabel")
-    velNumber.Name = "VelNumber"
-    velNumber.Size = UDim2.new(0.58, 0, 1, 0)
-    velNumber.Position = UDim2.new(0.42, 0, 0, 0)
-    velNumber.BackgroundTransparency = 1
-    velNumber.Font = Enum.Font.SourceSans
-    velNumber.TextSize = 16
-    velNumber.TextScaled = true
-    velNumber.TextColor3 = COLOR_WHITE
-    velNumber.TextStrokeTransparency = 0.7
-    velNumber.Text = "0"
-    velNumber.TextXAlignment = Enum.TextXAlignment.Right
-    velNumber.Parent = velFrame
+	guiByPlayer[player] = {
+		container = container,
+		nameLabel = nameLabel,
+		velNumber = velNumber,
+		seat = nil,
+		vehicle = nil,
+	}
 
-    guiByPlayer[player] = {
-        root = root;
-        container = container;
-        nameLabel = nameLabel;
-        velPrefix = velPrefix;
-        velNumber = velNumber;
-        seat = nil;
-        vehicle = nil;
-    }
-
-    return guiByPlayer[player]
+	return guiByPlayer[player]
 end
 
 local function removeGuiForPlayer(player)
-    local d = guiByPlayer[player]
-    if not d then return end
-    if d.container and d.container.Parent then
-        pcall(function() d.container:Destroy() end)
-    end
-    guiByPlayer[player] = nil
+	local d = guiByPlayer[player]
+	if not d then return end
+	if d.container and d.container.Parent then pcall(function() d.container:Destroy() end) end
+	guiByPlayer[player] = nil
 end
 
--- Atualiza posição (usando WorldToViewportPoint) e texto das GUIs
-local Camera = Workspace.CurrentCamera
-local function updateAll(dt)
-    if not Camera then Camera = Workspace.CurrentCamera end
+-- Get configured speed for a player's vehicle (returns number or nil)
+local function getConfiguredSpeedForPlayer(d, player)
+	if not d then return nil end
+	local vehicle = d.vehicle
+	if vehicle then
+		local entry = vehicleCache[vehicle]
+		if entry and entry.source then
+			local s = entry.source
+			if s.type == "Child" and s.obj and s.obj.Parent then
+				if s.obj:IsA("NumberValue") or s.obj:IsA("IntValue") then return tonumber(s.obj.Value) end
+				if s.obj:IsA("StringValue") then return tonumber(s.obj.Value) end
+			elseif s.type == "Attribute" and vehicle:GetAttribute(s.key) ~= nil then
+				return tonumber(vehicle:GetAttribute(s.key))
+			elseif s.type == "SeatChild" and s.obj and s.obj.Parent then
+				if s.obj:IsA("StringValue") then return tonumber(s.obj.Value) end
+				return tonumber(s.obj.Value)
+			elseif s.type == "SeatAttribute" and s.seat and s.seat:GetAttribute(s.key) ~= nil then
+				return tonumber(s.seat:GetAttribute(s.key))
+			end
+		end
 
-    for player, data in pairs(guiByPlayer) do
-        if not player or not player.Parent or not data or not data.container then
-            removeGuiForPlayer(player)
-        else
-            -- Determina posição de referência: seat (preferido) ou HRP
-            local refPos
-            if data.seat and data.seat.Parent then
-                refPos = data.seat.Position + STUDS_OFFSET
-            else
-                if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                    refPos = player.Character.HumanoidRootPart.Position + STUDS_OFFSET
-                end
-            end
-
-            if refPos then
-                local onScreen, screenPoint = pcall(function() return Camera:WorldToViewportPoint(refPos) end)
-                if onScreen and screenPoint and typeof(screenPoint) == "Vector3" then
-                    local depth = screenPoint.Z
-                    if depth > 0 and (refPos - Camera.CFrame.Position).Magnitude <= MAX_DISTANCE then
-                        data.container.Visible = true
-                        -- centraliza horizontalmente
-                        local sx = screenPoint.X
-                        local sy = screenPoint.Y
-                        data.container.Position = UDim2.new(0, sx - data.container.Size.X.Offset/2, 0, sy - data.container.Size.Y.Offset/2)
-                    else
-                        data.container.Visible = false
-                    end
-                else
-                    data.container.Visible = false
-                end
-            else
-                data.container.Visible = false
-            end
-
-            -- Atualiza valor da velocidade conforme a função original enviada
-            local value = nil
-            -- chama a função (usa o character)
-            local ok, res = pcall(function() return getCarSpeedValue_fromOriginal(player.Character) end)
-            if ok and type(res) == "number" then
-                value = math.floor(res + 0.5)
-            else
-                value = 0
-            end
-
-            -- Aplica cor e emoji conforme regra
-            if value >= 1 and value <= 100 then
-                data.velNumber.TextColor3 = COLOR_GREEN
-                data.velNumber.Text = tostring(value)
-            elseif value >= 101 then
-                data.velNumber.TextColor3 = COLOR_RED
-                data.velNumber.Text = tostring(value) .. " ⚠️"
-            else
-                data.velNumber.TextColor3 = COLOR_WHITE
-                data.velNumber.Text = "0"
-            end
-        end
-    end
+		-- fallback quick search
+		local direct = findNumericChild(vehicle)
+		if direct then
+			if direct:IsA("StringValue") then return tonumber(direct.Value) end
+			return tonumber(direct.Value)
+		end
+	end
+	return nil
 end
 
--- Periodicamente cria/removes GUIs conforme jogadores sentados
+-- Refresh who is seated and create/remove GUIs
 local function refreshPlayers()
-    for _, player in ipairs(Players:GetPlayers()) do
-        local ok, seat = pcall(isPlayerSeated, player)
-        if ok and seat then
-            local d = createGuiForPlayer(player)
-            if d then
-                d.seat = seat
-                d.vehicle = getVehicleFromSeat(seat)
-            end
-        else
-            if guiByPlayer[player] then
-                removeGuiForPlayer(player)
-            end
-        end
-    end
+	for _,pl in ipairs(Players:GetPlayers()) do
+		local ok, seat = pcall(isPlayerSeated, pl)
+		if ok and seat then
+			local d = createGuiForPlayer(pl)
+			if d then
+				d.seat = seat
+				d.vehicle = getVehicleFromSeat(seat)
+				if d.vehicle then monitorVehicle(d.vehicle) end
+			end
+		else
+			if guiByPlayer[pl] then removeGuiForPlayer(pl) end
+		end
+	end
+
+	for veh,_ in pairs(vehicleCache) do
+		if not veh.Parent then cleanupVehicle(veh) end
+	end
 end
 
--- Loop principal: refresh em intervalo e update por frame
+-- Update loop: position GUIs and update speed text
 RunService.RenderStepped:Connect(function(dt)
-    refreshTimer = refreshTimer + dt
-    if refreshTimer >= REFRESH_INTERVAL then
-        refreshTimer = 0
-        pcall(refreshPlayers)
-    end
-    pcall(updateAll, dt)
+	refreshTimer = refreshTimer + dt
+	if refreshTimer >= CHECK_INTERVAL then
+		refreshTimer = 0
+		pcall(refreshPlayers)
+	end
+
+	if not Camera then Camera = Workspace.CurrentCamera end
+
+	for player,d in pairs(guiByPlayer) do
+		if not player or not d or not d.container then
+			removeGuiForPlayer(player)
+		else
+			-- position
+			local refPos
+			if d.seat and d.seat.Parent then
+				refPos = d.seat.Position + OFFSET
+			elseif player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+				refPos = player.Character.HumanoidRootPart.Position + OFFSET
+			end
+
+			if refPos then
+				local onScreen, point = pcall(function() return Camera:WorldToViewportPoint(refPos) end)
+				if onScreen and point and typeof(point) == "Vector3" then
+					local inFront = point.Z > 0
+					local dist = (refPos - Camera.CFrame.Position).Magnitude
+					if inFront and dist <= MAX_DISTANCE then
+						d.container.Visible = true
+						local sx = point.X; local sy = point.Y
+						d.container.Position = UDim2.new(0, sx - d.container.Size.X.Offset/2, 0, sy - d.container.Size.Y.Offset/2)
+					else
+						d.container.Visible = false
+					end
+				else
+					d.container.Visible = false
+				end
+			else
+				d.container.Visible = false
+			end
+
+			-- speed value (using your logic but WITHOUT time check)
+			local ok, val = pcall(function() return getConfiguredSpeedForPlayer(d, player) end)
+			local value = (ok and type(val) == "number") and math.floor(val + 0.5) or 0
+
+			-- apply color & emoji
+			if value >= 1 and value <= 100 then
+				d.velNumber.TextColor3 = COLOR_GREEN
+				d.velNumber.Text = tostring(value)
+			elseif value >= 101 then
+				d.velNumber.TextColor3 = COLOR_RED
+				d.velNumber.Text = tostring(value) .. " ⚠️"
+			else
+				d.velNumber.TextColor3 = COLOR_WHITE
+				d.velNumber.Text = "0"
+			end
+		end
+	end
 end)
 
--- Limpeza ao sair
-Players.PlayerRemoving:Connect(function(p)
-    removeGuiForPlayer(p)
-end)
+-- cleanup on player leave
+Players.PlayerRemoving:Connect(function(p) removeGuiForPlayer(p) end)
 
--- Inicial
+-- initial
 pcall(refreshPlayers)
-print("[SpeedHUD] carregado: HUDs acima de jogadores em veículos (mostrando valor detectado).")
+print("[SpeedHUD] carregado (sem checagem temporal).")
