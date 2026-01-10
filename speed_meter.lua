@@ -1,5 +1,5 @@
 -- ===============================
--- Roblox Brookhaven - Painel Final Corrigido
+-- Roblox Brookhaven - Painel Final Único
 -- Velocímetro + Cronômetro
 -- Delta Executor / LocalScript
 -- ===============================
@@ -38,18 +38,6 @@ local function makeDraggable(frame)
 			)
 		end
 	end)
-end
-
-local function round10(num)
-	return math.floor(num / 10 + 0.5) * 10
-end
-
-local function convertBrookSpeed(speed)
-	if speed <= 100 then
-		return math.floor(speed * 0.7)
-	else
-		return "80+"
-	end
 end
 
 -- ===============================
@@ -130,7 +118,7 @@ local btnCron = criarToggle("Cronômetro",0.55)
 -- PAINEL DO CRONÔMETRO
 -- ===============================
 local painelCron = Instance.new("Frame", gui)
-painelCron.Size = UDim2.fromOffset(220,80) -- menor tamanho
+painelCron.Size = UDim2.fromOffset(220,80)
 painelCron.Position = UDim2.fromScale(0.4,0.5)
 painelCron.BackgroundColor3 = Color3.fromRGB(15,15,15)
 painelCron.BorderSizePixel = 0
@@ -221,9 +209,7 @@ btnCron.MouseButton1Click:Connect(function()
 	btnCron.Text = chronoEnabled and "ON" or "OFF"
 	btnCron.BackgroundColor3 = chronoEnabled and Color3.fromRGB(0,120,0) or Color3.fromRGB(120,0,0)
 	painelCron.Visible = chronoEnabled
-	if not chronoEnabled then
-		miniCron.Visible = false
-	end
+	if not chronoEnabled then miniCron.Visible = false end
 	if chronoEnabled then chronoTime = 0 end
 end)
 
@@ -269,13 +255,15 @@ end)
 -- LOOP PRINCIPAL
 -- ===============================
 RunService.RenderStepped:Connect(function(dt)
+	-- Velocímetro
 	if velEnabled then
 		for _, p in pairs(Players:GetPlayers()) do
 			if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
 				local hrp = p.Character.HumanoidRootPart
-				local vehicleSpeed = hrp.AssemblyLinearVelocity.Magnitude
-				local speedRounded = round10(vehicleSpeed)
-				local convSpeed = convertBrookSpeed(speedRounded)
+
+				-- ======= VELOCIDADE FIXA DO VEÍCULO =======
+				local vehicleSpeed = hrp:FindFirstChild("VehicleSeat") and hrp.VehicleSeat.MaxSpeed or 0
+				local convSpeed = vehicleSpeed
 
 				local meter = meters[p]
 				if not meter then
@@ -304,7 +292,7 @@ RunService.RenderStepped:Connect(function(dt)
 					meter = meters[p]
 				end
 
-				if type(convSpeed)=="number" and convSpeed <= 70 then
+				if convSpeed <= 100 then
 					meter.speedLabel.TextColor3 = Color3.fromRGB(0,255,0)
 					meter.speedLabel.Text = "Vel: "..convSpeed
 				else
@@ -314,7 +302,6 @@ RunService.RenderStepped:Connect(function(dt)
 			end
 		end
 	else
-		-- remove os metros quando desligado
 		for _, d in pairs(meters) do
 			if d.gui then d.gui:Destroy() end
 		end
