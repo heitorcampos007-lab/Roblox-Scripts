@@ -1,5 +1,5 @@
 -- ===============================
--- Roblox Brookhaven - Painel Único
+-- Roblox Brookhaven - Painel Final Único
 -- Velocímetro (veículo) + Cronômetro
 -- Painéis arrastáveis, mesmo minimizados
 -- ===============================
@@ -76,7 +76,7 @@ local gui = Instance.new("ScreenGui", game.CoreGui)
 gui.Name = "KartPanelGUI"
 gui.ResetOnSpawn = false
 
--- Painel Principal
+-- ---------- PAINEL VELOCÍMETRO ----------
 local painel = Instance.new("Frame", gui)
 painel.Size = UDim2.fromOffset(280,140)
 painel.Position = UDim2.fromScale(0.05,0.55)
@@ -85,7 +85,6 @@ painel.BorderSizePixel = 0
 Instance.new("UICorner", painel).CornerRadius = UDim.new(0,12)
 makeDraggable(painel)
 
--- Título
 local titulo = Instance.new("TextLabel", painel)
 titulo.Text = "Painel - Kart Brookhaven 🏁"
 titulo.Size = UDim2.fromScale(1,0.2)
@@ -93,7 +92,6 @@ titulo.BackgroundTransparency = 1
 titulo.TextColor3 = Color3.new(1,1,1)
 titulo.TextScaled = true
 
--- Botão X
 local btnClose = Instance.new("TextButton", painel)
 btnClose.Text = "X"
 btnClose.Size = UDim2.fromScale(0.08,0.2)
@@ -102,41 +100,98 @@ btnClose.BackgroundTransparency = 1
 btnClose.TextColor3 = Color3.new(1,1,1)
 btnClose.TextScaled = true
 
--- ===============================
--- BOTÕES ON/OFF
--- ===============================
-local function criarToggle(texto, posY)
-	local frame = Instance.new("Frame", painel)
-	frame.Position = UDim2.fromScale(0.1,posY)
-	frame.Size = UDim2.fromScale(0.8,0.12)
-	frame.BackgroundColor3 = Color3.fromRGB(40,40,40)
-	Instance.new("UICorner", frame).CornerRadius = UDim.new(0,8)
+-- Função Mini Painel 🏁
+local miniPainel = Instance.new("TextButton", gui)
+miniPainel.Size = UDim2.fromOffset(50,50)
+miniPainel.Position = painel.Position
+miniPainel.BackgroundColor3 = Color3.new(0,0,0)
+miniPainel.Text = "🏁"
+miniPainel.TextScaled = true
+miniPainel.Visible = false
+Instance.new("UICorner", miniPainel).CornerRadius = UDim.new(1,0)
+makeDraggable(miniPainel)
 
-	local label = Instance.new("TextLabel", frame)
-	label.Text = texto
-	label.Size = UDim2.fromScale(0.6,1)
-	label.BackgroundTransparency = 1
-	label.TextColor3 = Color3.new(1,1,1)
-	label.TextScaled = true
+btnClose.MouseButton1Click:Connect(function()
+	-- animação de minimizar
+	TweenService:Create(painel,TweenInfo.new(0.3),{Size=UDim2.fromOffset(50,50)}):Play()
+	task.wait(0.3)
+	painel.Visible = false
+	miniPainel.Position = painel.Position
+	miniPainel.Visible = true
+end)
+miniPainel.MouseButton1Click:Connect(function()
+	painel.Position = miniPainel.Position
+	painel.Size = UDim2.fromOffset(280,140)
+	painel.Visible = true
+	miniPainel.Visible = false
+end)
 
-	local btn = Instance.new("TextButton", frame)
-	btn.Size = UDim2.fromScale(0.35,0.7)
-	btn.Position = UDim2.fromScale(0.63,0.15)
-	btn.Text = "OFF"
-	btn.BackgroundColor3 = Color3.fromRGB(120,0,0)
-	btn.TextColor3 = Color3.new(1,1,1)
-	btn.TextScaled = true
-	Instance.new("UICorner", btn)
+-- ---------- BOTÃO VELOCÍMETRO ----------
+local btnVel = Instance.new("TextButton", painel)
+btnVel.Size = UDim2.fromOffset(80,30)
+btnVel.Position = UDim2.fromOffset(20,50)
+btnVel.Text = "OFF"
+btnVel.BackgroundColor3 = Color3.fromRGB(130,0,0)
+btnVel.TextColor3 = Color3.new(1,1,1)
+Instance.new("UICorner", btnVel)
+btnVel.MouseButton1Click:Connect(function()
+	velEnabled = not velEnabled
+	if velEnabled then
+		btnVel.Text = "ON"
+		btnVel.BackgroundColor3 = Color3.fromRGB(0,180,0)
+		-- cria velocímetros para todos players
+		for _,p in pairs(Players:GetPlayers()) do
+			if p.Character then
+				local hrp = p.Character:FindFirstChild("HumanoidRootPart")
+				if hrp then
+					local bb = Instance.new("BillboardGui", hrp)
+					bb.Name = "SpeedMeter"
+					bb.Size = UDim2.new(0,140,0,35)
+					bb.StudsOffset = Vector3.new(0,3,0)
+					bb.AlwaysOnTop = true
+					local txt = Instance.new("TextLabel", bb)
+					txt.Size = UDim2.new(1,0,1,0)
+					txt.BackgroundTransparency = 1
+					txt.Font = Enum.Font.SourceSansBold
+					txt.TextScaled = true
+					txt.TextStrokeTransparency = 0
+					txt.TextColor3 = Color3.new(0,1,0)
+					txt.Text = "Vel: 0"
+					meters[p] = {gui=bb,label=txt}
+				end
+			end
+		end
+	else
+		btnVel.Text = "OFF"
+		btnVel.BackgroundColor3 = Color3.fromRGB(130,0,0)
+		-- remove velocímetros
+		for _,d in pairs(meters) do
+			if d.gui then d.gui:Destroy() end
+		end
+		meters = {}
+	end
+end)
 
-	return btn
-end
+-- Atualiza velocímetro
+RunService.RenderStepped:Connect(function()
+	if not velEnabled then return end
+	for p,d in pairs(meters) do
+		if p.Character then
+			local speedVal = getCarSpeedValue(p.Character)
+			local speed = 0
+			if speedVal then speed = math.floor(speedVal.Value) end
+			d.label.Text = "Vel: "..speed
+			if speed <= 100 then
+				d.label.TextColor3 = Color3.fromRGB(0,255,0)
+			else
+				d.label.TextColor3 = Color3.fromRGB(255,0,0)
+				d.label.Text = d.label.Text.." ⚠️"
+			end
+		end
+	end
+end)
 
-local btnVel = criarToggle("Velocímetro",0.3)
-local btnCron = criarToggle("Cronômetro",0.55)
-
--- ===============================
--- PAINEL DO CRONÔMETRO
--- ===============================
+-- ---------- PAINEL CRONÔMETRO ----------
 local painelCron = Instance.new("Frame", gui)
 painelCron.Size = UDim2.fromOffset(220,80)
 painelCron.Position = UDim2.fromScale(0.4,0.5)
@@ -185,19 +240,7 @@ btnReset.BackgroundColor3 = Color3.fromRGB(100,100,100)
 btnReset.TextColor3 = Color3.new(1,1,1)
 Instance.new("UICorner", btnReset)
 
--- ===============================
--- CÍRCULOS MINIMIZADOS
--- ===============================
-local miniPainel = Instance.new("TextButton", gui)
-miniPainel.Size = UDim2.fromOffset(50,50)
-miniPainel.Position = painel.Position
-miniPainel.BackgroundColor3 = Color3.new(0,0,0)
-miniPainel.Text = "🏁"
-miniPainel.TextScaled = true
-miniPainel.Visible = false
-Instance.new("UICorner", miniPainel).CornerRadius = UDim.new(1,0)
-makeDraggable(miniPainel)
-
+-- Mini Cronômetro ⏱️
 local miniCron = Instance.new("TextButton", gui)
 miniCron.Size = UDim2.fromOffset(50,50)
 miniCron.Position = painelCron.Position
@@ -207,3 +250,59 @@ miniCron.TextScaled = true
 miniCron.Visible = false
 Instance.new("UICorner", miniCron).CornerRadius = UDim.new(1,0)
 makeDraggable(miniCron)
+
+-- Botão Cronômetro On/Off
+btnCron.MouseButton1Click:Connect(function()
+	chronoEnabled = not chronoEnabled
+	if chronoEnabled then
+		btnCron.Text = "ON"
+		btnCron.BackgroundColor3 = Color3.fromRGB(0,180,0)
+		painelCron.Visible = true
+	else
+		btnCron.Text = "OFF"
+		btnCron.BackgroundColor3 = Color3.fromRGB(130,0,0)
+		painelCron.Visible = false
+	end
+end)
+
+-- Fechar painel cronômetro
+btnCloseCron.MouseButton1Click:Connect(function()
+	TweenService:Create(painelCron,TweenInfo.new(0.3),{Size=UDim2.fromOffset(50,50)}):Play()
+	task.wait(0.3)
+	painelCron.Visible = false
+	miniCron.Position = painelCron.Position
+	miniCron.Visible = true
+end)
+miniCron.MouseButton1Click:Connect(function()
+	painelCron.Position = miniCron.Position
+	painelCron.Size = UDim2.fromOffset(220,80)
+	painelCron.Visible = true
+	miniCron.Visible = false
+end)
+
+-- Cronômetro lógica
+btnStartStop.MouseButton1Click:Connect(function()
+	chronoRunning = not chronoRunning
+	if chronoRunning then
+		btnStartStop.Text = "Parar"
+		btnStartStop.BackgroundColor3 = Color3.fromRGB(255,0,0)
+	else
+		btnStartStop.Text = "Iniciar"
+		btnStartStop.BackgroundColor3 = Color3.fromRGB(130,0,255)
+	end
+end)
+
+btnReset.MouseButton1Click:Connect(function()
+	chronoTime = 0
+	cronLabel.Text = "00:00:00"
+end)
+
+RunService.RenderStepped:Connect(function(dt)
+	if chronoRunning then
+		chronoTime = chronoTime + dt
+		local minutes = math.floor(chronoTime/60)
+		local seconds = math.floor(chronoTime%60)
+		local milliseconds = math.floor((chronoTime*100)%100)
+		cronLabel.Text = string.format("%02d:%02d:%02d",minutes,seconds,milliseconds)
+	end
+end)
