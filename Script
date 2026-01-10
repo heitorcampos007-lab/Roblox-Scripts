@@ -1,160 +1,140 @@
---[[
-🔥 Brookhaven Driver Speed Monitor – Ultimate
-Detecta a velocidade de cada motorista separadamente
-Mostra alerta visual e sonoro quando ultrapassa 100
-Botão ON/OFF arrastável
-Por Heitor
-]]
+-- CONFIG
+local DEFAULT_LIMIT = 100
+local UPDATE_RATE = 0.15
 
+-- SERVICES
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local SoundService = game:GetService("SoundService")
 local LocalPlayer = Players.LocalPlayer
 
--- Criar GUI principal
-local gui = Instance.new("ScreenGui")
-gui.Name = "DriverSpeedMonitorGUI"
-gui.ResetOnSpawn = false
-gui.Parent = game:GetService("CoreGui")
-
--- Botão ON/OFF arrastável
-local button = Instance.new("TextButton")
-button.Size = UDim2.new(0,100,0,40)
-button.Position = UDim2.new(0,50,0,50)
-button.BackgroundColor3 = Color3.fromRGB(30,30,30)
-button.TextColor3 = Color3.fromRGB(255,255,255)
-button.Text = "OFF"
-button.TextScaled = true
-button.Active = true
-button.Draggable = true
-button.Parent = gui
-
+-- STATE
 local enabled = false
-button.MouseButton1Click:Connect(function()
-    enabled = not enabled
-    button.Text = enabled and "ON" or "OFF"
+local speedLimit = DEFAULT_LIMIT
+local tags = {}
+
+-- UI PANEL
+local gui = Instance.new("ScreenGui", game.CoreGui)
+gui.Name = "SpeedRadarGUI"
+
+local panel = Instance.new("Frame", gui)
+panel.Size = UDim2.fromOffset(220, 130)
+panel.Position = UDim2.fromOffset(100, 100)
+panel.BackgroundColor3 = Color3.fromRGB(25,25,25)
+panel.BorderSizePixel = 0
+panel.Active = true
+panel.Draggable = true
+
+local toggle = Instance.new("TextButton", panel)
+toggle.Size = UDim2.fromOffset(200, 35)
+toggle.Position = UDim2.fromOffset(10, 10)
+toggle.Text = "OFF"
+toggle.BackgroundColor3 = Color3.fromRGB(150,0,0)
+toggle.TextColor3 = Color3.new(1,1,1)
+
+local box = Instance.new("TextBox", panel)
+box.Size = UDim2.fromOffset(200, 35)
+box.Position = UDim2.fromOffset(10, 55)
+box.PlaceholderText = "Limite (ex: 100)"
+box.Text = tostring(speedLimit)
+box.BackgroundColor3 = Color3.fromRGB(40,40,40)
+box.TextColor3 = Color3.new(1,1,1)
+
+-- UI EVENTS
+toggle.MouseButton1Click:Connect(function()
+	enabled = not enabled
+	toggle.Text = enabled and "ON" or "OFF"
+	toggle.BackgroundColor3 = enabled and Color3.fromRGB(0,150,0) or Color3.fromRGB(150,0,0)
 end)
 
--- Criar Billboard para cada jogador
-local function createBillboard(player)
-    local billboard = Instance.new("BillboardGui")
-    billboard.Name = "SpeedBillboard"
-    billboard.Size = UDim2.new(0,180,0,60)
-    billboard.StudsOffset = Vector3.new(0,3,0)
-    billboard.AlwaysOnTop = true
-    billboard.Parent = gui
-
-    local frame = Instance.new("Frame")
-    frame.BackgroundTransparency = 1
-    frame.Size = UDim2.new(1,0,1,0)
-    frame.Parent = billboard
-
-    local nickLabel = Instance.new("TextLabel")
-    nickLabel.Size = UDim2.new(1,0,0.5,0)
-    nickLabel.BackgroundTransparency = 1
-    nickLabel.TextColor3 = Color3.fromRGB(255,255,255)
-    nickLabel.TextScaled = true
-    nickLabel.Font = Enum.Font.SourceSansBold
-    nickLabel.Text = player.Name
-    nickLabel.Parent = frame
-
-    local velLabel = Instance.new("TextLabel")
-    velLabel.Size = UDim2.new(1,0,0.5,0)
-    velLabel.Position = UDim2.new(0,0,0.5,0)
-    velLabel.BackgroundTransparency = 1
-    velLabel.TextScaled = true
-    velLabel.Font = Enum.Font.SourceSansBold
-    velLabel.TextColor3 = Color3.fromRGB(255,255,255)
-    velLabel.Text = "Vel: 0"
-    velLabel.Parent = frame
-
-    -- Alerta visual (Frame vermelho)
-    local alertFrame = Instance.new("Frame")
-    alertFrame.Size = UDim2.new(1,0,1,0)
-    alertFrame.BackgroundColor3 = Color3.fromRGB(255,0,0)
-    alertFrame.BackgroundTransparency = 0.7
-    alertFrame.Visible = false
-    alertFrame.Parent = frame
-
-    return billboard, velLabel, alertFrame
-end
-
--- Tabela de billboards
-local billboards = {}
-
-local function addPlayer(player)
-    local bb, vel, alert = createBillboard(player)
-    billboards[player] = {billboard=bb, velLabel=vel, alert=alert}
-end
-
-for _, player in ipairs(Players:GetPlayers()) do
-    addPlayer(player)
-end
-Players.PlayerAdded:Connect(addPlayer)
-
--- Função para pegar a velocidade do carro do motorista
-local function getDriverSpeed(character)
-    if not character then return 0 end
-    local humanoid = character:FindFirstChildWhichIsA("Humanoid")
-    if not humanoid then return 0 end
-    local seat = humanoid.SeatPart
-    if not seat then return 0 end
-
-    -- Só motoristas
-    if seat:IsA("VehicleSeat") and seat.Occupant == humanoid then
-        local carModel = seat:FindFirstAncestorWhichIsA("Model")
-        if carModel then
-            for _, obj in ipairs(carModel:GetDescendants()) do
-                if obj:IsA("NumberValue") and obj.Name:lower():find("speed") then
-                    return obj.Value
-                end
-            end
-        end
-    end
-
-    return 0
-end
-
--- Criar som de alerta
-local alertSound = Instance.new("Sound")
-alertSound.SoundId = "rbxassetid://911882888" -- Som de alerta (substitua se quiser outro)
-alertSound.Volume = 1
-alertSound.Parent = SoundService
-
--- Atualização contínua
-RunService.RenderStepped:Connect(function()
-    for player, data in pairs(billboards) do
-        local bb = data.billboard
-        local velLabel = data.velLabel
-        local alertFrame = data.alert
-
-        if enabled and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            local speed = getDriverSpeed(player.Character)
-
-            if speed > 0 then
-                bb.Enabled = true
-                bb.Adornee = player.Character:FindFirstChild("Head") or player.Character:FindFirstChild("HumanoidRootPart")
-
-                -- Atualizar cores e alerta
-                if speed <= 100 then
-                    velLabel.TextColor3 = Color3.fromRGB(0,255,0) -- verde
-                    velLabel.Text = "Vel: "..speed
-                    alertFrame.Visible = false
-                else
-                    velLabel.TextColor3 = Color3.fromRGB(255,0,0) -- vermelho
-                    velLabel.Text = "Vel: "..speed.." ⚠️"
-                    alertFrame.Visible = true
-                    if not alertSound.IsPlaying then
-                        alertSound:Play()
-                    end
-                end
-            else
-                bb.Enabled = false
-                alertFrame.Visible = false
-            end
-        else
-            bb.Enabled = false
-            alertFrame.Visible = false
-        end
-    end
+box.FocusLost:Connect(function()
+	local v = tonumber(box.Text)
+	if v then speedLimit = v end
 end)
+
+-- TAG CREATION
+local function createTag(player)
+	local bb = Instance.new("BillboardGui")
+	bb.Size = UDim2.fromOffset(200, 50)
+	bb.StudsOffset = Vector3.new(0, 3, 0)
+	bb.AlwaysOnTop = true
+
+	local label = Instance.new("TextLabel", bb)
+	label.Size = UDim2.fromScale(1,1)
+	label.BackgroundTransparency = 1
+	label.TextScaled = true
+	label.Font = Enum.Font.SourceSansBold
+	label.TextColor3 = Color3.new(1,1,1)
+
+	tags[player] = {gui = bb, label = label}
+end
+
+local function removeTag(player)
+	if tags[player] then
+		tags[player].gui:Destroy()
+		tags[player] = nil
+	end
+end
+
+-- SPEED DETECTION
+local function getDriverSpeed(player)
+	local char = player.Character
+	if not char then return end
+
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	if not hum then return end
+
+	local seat = hum.SeatPart
+	if not seat or not seat:IsA("VehicleSeat") then return end
+
+	local vehicle = seat:FindFirstAncestorOfClass("Model")
+	if not vehicle or not vehicle.PrimaryPart then return end
+
+	return vehicle.PrimaryPart.AssemblyLinearVelocity.Magnitude
+end
+
+-- MAIN LOOP
+RunService.Heartbeat:Connect(function()
+	if not enabled then
+		for _, data in pairs(tags) do
+			data.gui.Parent = nil
+		end
+		return
+	end
+
+	for _, player in ipairs(Players:GetPlayers()) do
+		if not tags[player] then
+			createTag(player)
+		end
+
+		local data = tags[player]
+		local char = player.Character
+		if not char or not char:FindFirstChild("Head") then
+			data.gui.Parent = nil
+			continue
+		end
+
+		local speed = getDriverSpeed(player)
+		if not speed then
+			data.gui.Parent = nil
+			continue
+		end
+
+		local textColor = Color3.fromRGB(0,255,0)
+		local warn = ""
+
+		if speed > speedLimit then
+			textColor = Color3.fromRGB(255,0,0)
+			warn = " ⚠️"
+		end
+
+		data.label.Text =
+			player.Name .. "\n" ..
+			"Vel: " .. math.floor(speed) .. warn
+
+		data.label.TextColor3 = textColor
+		data.gui.Parent = char.Head
+	end
+end)
+
+-- CLEANUP
+Players.PlayerRemoving:Connect(removeTag)
