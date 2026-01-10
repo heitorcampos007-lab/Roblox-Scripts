@@ -1,4 +1,9 @@
--- ================= CONFIG =================
+-- SpeedHUD Delta v4
+-- Versão com debug/ativação imediata: quando você clicar ON o script fará varredura e tentará criar os HUDs,
+-- imprimindo no console por que cada jogador não teve HUD criado (se houver problema).
+-- Execute via executor (Delta) dentro do jogo.
+
+-- ========== CONFIG ==========
 local REFRESH_INTERVAL = 0.6
 local OFFSET_STUDS = Vector3.new(0, 3.6, 0)
 local PRIORITY_NAMES = { "Speed","MaxSpeed","VehicleSpeed","CarSpeed","TopSpeed","MaxVelocity","SpeedValue","DriveSpeed" }
@@ -6,7 +11,7 @@ local SPEED_KEYWORDS = { "speed", "vel", "velocity", "velocidade" }
 local COLOR_GREEN = Color3.fromRGB(76,175,80)
 local COLOR_RED   = Color3.fromRGB(244,67,54)
 local COLOR_WHITE = Color3.fromRGB(255,255,255)
--- ===========================================
+-- ===========================
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -16,7 +21,7 @@ local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 if not LocalPlayer then repeat Players.PlayerAdded:Wait() until Players.LocalPlayer; LocalPlayer = Players.LocalPlayer end
 
--- Executor helpers
+-- executor helpers
 local gethui_f = (type(gethui) == "function") and gethui
 if not gethui_f and type(syn) == "table" and type(syn.get_hui) == "function" then gethui_f = syn.get_hui end
 local protect_gui_f = (type(syn) == "table" and type(syn.protect_gui) == "function") and syn.protect_gui
@@ -37,15 +42,14 @@ end
 local GuiParent, parentSource = chooseGuiParent()
 print("[SpeedHUD] GUI parent:", parentSource)
 if protect_gui_f and GuiParent then pcall(function() protect_gui_f(GuiParent) end); print("[SpeedHUD] protect_gui aplicado") end
-if not GuiParent then warn("[SpeedHUD] Nenhum GuiParent disponível. Executor pode estar bloqueando GUIs.") end
+if not GuiParent then warn("[SpeedHUD] Nenhum GuiParent disponível. Executor pode bloquear GUIs.") end
 
--- ---------- estado ----------
-local enabled = false -- começa OFF, precisa clicar
+-- estado
+local enabled = false -- começa OFF
 local guiByPlayer = {}
 local vehicleData = {}
--- --------------------------------
 
--- funções utilitárias (resumidas; mantive a lógica anterior de detecção)
+-- utilitárias
 local function isPlayerDriving(player)
 	if not player or not player.Character then return false end
 	local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
@@ -71,9 +75,7 @@ local function findNumericChildInModel(model)
 	if not model then return nil end
 	for _,name in ipairs(PRIORITY_NAMES) do
 		local ok, v = pcall(function() return model:FindFirstChild(name, true) end)
-		if ok and v and (v:IsA("NumberValue") or v:IsA("IntValue") or v:IsA("StringValue")) then
-			return v
-		end
+		if ok and v and (v:IsA("NumberValue") or v:IsA("IntValue") or v:IsA("StringValue")) then return v end
 	end
 	for _,desc in ipairs(model:GetDescendants()) do
 		if desc:IsA("NumberValue") or desc:IsA("IntValue") or desc:IsA("StringValue") then
@@ -99,7 +101,7 @@ local function findAttributeKey(model)
 	return nil
 end
 
--- monitorVehicle (idêntico ao anterior): detecta child/attribute e conecta DescendantAdded / AttributeChanged
+-- monitorVehicle (detecta child/attribute e conecta DescendantAdded / AttributeChanged)
 local function monitorVehicle(vehicle)
 	if not vehicle or not vehicle.Parent then return end
 	if vehicleData[vehicle] then return vehicleData[vehicle] end
@@ -111,20 +113,24 @@ local function monitorVehicle(vehicle)
 		if found then data.source = { type = "ChildValue", obj = found }; data.lastFound = found; return end
 		local key = findAttributeKey(vehicle)
 		if key then data.source = { type = "Attribute", key = key }; return end
-		-- seat children/attrs
+		-- verificar seats internos
 		for _,seat in ipairs(vehicle:GetDescendants()) do
 			if seat:IsA("VehicleSeat") then
 				for _,c in ipairs(seat:GetChildren()) do
 					if (c:IsA("NumberValue") or c:IsA("IntValue") or c:IsA("StringValue")) then
 						local ln = c.Name:lower()
-						for _,k in ipairs(SPEED_KEYWORDS) do if string.find(ln, k) then data.source = { type="ChildValue", obj=c }; data.lastFound = c; return end end
+						for _,k in ipairs(SPEED_KEYWORDS) do
+							if string.find(ln, k) then data.source = { type="ChildValue", obj=c }; data.lastFound=c; return end
+						end
 					end
 				end
 				if type(seat.GetAttributes) == "function" then
 					for k,v in pairs(seat:GetAttributes()) do
 						if type(v) == "number" then
 							local lk = k:lower()
-							for _,kw in ipairs(SPEED_KEYWORDS) do if string.find(lk, kw) then data.source = { type="SeatAttribute", key=k, seat=seat }; return end end
+							for _,kw in ipairs(SPEED_KEYWORDS) do
+								if string.find(lk, kw) then data.source = { type="SeatAttribute", key=k, seat=seat }; return end
+							end
 						end
 					end
 				end
@@ -137,7 +143,9 @@ local function monitorVehicle(vehicle)
 		return vehicle.DescendantAdded:Connect(function(desc)
 			if desc:IsA("NumberValue") or desc:IsA("IntValue") or desc:IsA("StringValue") then
 				local lname = desc.Name:lower()
-				for _,k in ipairs(SPEED_KEYWORDS) do if string.find(lname, k) then wait(0.05); tryDetect(); return end end
+				for _,k in ipairs(SPEED_KEYWORDS) do
+					if string.find(lname, k) then wait(0.05); tryDetect(); return end
+				end
 			end
 		end)
 	end)
@@ -145,7 +153,10 @@ local function monitorVehicle(vehicle)
 
 	if type(vehicle.GetAttributeChangedSignal) == "function" then
 		local ok2, conn2 = pcall(function()
-			return vehicle:GetAttributeChangedSignal():Connect(function(attr) local lk = attr:lower(); for _,k in ipairs(SPEED_KEYWORDS) do if string.find(lk, k) then pcall(tryDetect) end end end)
+			return vehicle:GetAttributeChangedSignal():Connect(function(attr)
+				local lk = attr:lower()
+				for _,k in ipairs(SPEED_KEYWORDS) do if string.find(lk, k) then pcall(tryDetect) end end
+			end)
 		end)
 		if ok2 and conn2 then table.insert(data.connections, conn2) end
 	end
@@ -161,11 +172,11 @@ local function cleanupVehicle(vehicle)
 	vehicleData[vehicle] = nil
 end
 
--- GUI creation (Billboard) - igual lógica anterior
+-- cria billboard
 local function createBillboardForPlayer(player, seat)
-	if not GuiParent then return nil end
+	if not GuiParent then return nil, "GuiParent nil" end
 	if guiByPlayer[player] and guiByPlayer[player].billboard and guiByPlayer[player].billboard.Parent then
-		local g = guiByPlayer[player]; g.billboard.Adornee = seat or g.billboard.Adornee; return g
+		local g = guiByPlayer[player]; g.billboard.Adornee = seat or g.billboard.Adornee; return g, "reused"
 	end
 
 	local ok, b = pcall(function()
@@ -179,7 +190,7 @@ local function createBillboardForPlayer(player, seat)
 		bb.Parent = GuiParent
 		return bb
 	end)
-	if not ok or not b then warn("[SpeedHUD] falha criar Billboard:", b); return nil end
+	if not ok or not b then return nil, ("failed_create:"..tostring(b)) end
 
 	local nameLabel = Instance.new("TextLabel")
 	nameLabel.BackgroundTransparency = 1
@@ -203,7 +214,7 @@ local function createBillboardForPlayer(player, seat)
 
 	guiByPlayer[player] = { billboard = b; nameLabel = nameLabel; speedLabel = speedLabel; seat = seat; vehicle = seat and getVehicleFromSeat(seat) or nil; visible = true }
 	if guiByPlayer[player].vehicle then monitorVehicle(guiByPlayer[player].vehicle) end
-	return guiByPlayer[player]
+	return guiByPlayer[player], "created"
 end
 
 local function removeBillboardForPlayer(player)
@@ -227,7 +238,7 @@ local function getVehicleDefinedSpeed(d)
 			return s.seat:GetAttribute(s.key), ("SeatAttribute:%s"):format(s.key)
 		end
 	end
-	-- fallback: search direct children quickly
+	-- fallback quick search
 	local direct = findNumericChildInModel(d.vehicle) or (d.seat and (function()
 		for _,c in ipairs(d.seat:GetChildren()) do
 			if (c:IsA("NumberValue") or c:IsA("IntValue") or c:IsA("StringValue")) then
@@ -244,7 +255,11 @@ local function getVehicleDefinedSpeed(d)
 	return nil, nil
 end
 
-local function getPhysicalSpeedForSeat(seat) if not seat then return 0 end; local vel = seat.AssemblyLinearVelocity or seat.Velocity or Vector3.new(); return math.floor(vel.Magnitude + 0.5) end
+local function getPhysicalSpeedForSeat(seat)
+	if not seat then return 0 end
+	local vel = seat.AssemblyLinearVelocity or seat.Velocity or Vector3.new()
+	return math.floor(vel.Magnitude + 0.5)
+end
 
 local function updateGuiForPlayer(player, d)
 	if not d or not d.billboard then return end
@@ -254,15 +269,12 @@ local function updateGuiForPlayer(player, d)
 	if displayed >= 1 and displayed <= 100 then d.speedLabel.TextColor3 = COLOR_GREEN; d.speedLabel.Text = "Vel: " .. tostring(displayed)
 	elseif displayed >= 101 then d.speedLabel.TextColor3 = COLOR_RED; d.speedLabel.Text = "Vel: " .. tostring(displayed) .. " ⚠️"
 	else d.speedLabel.TextColor3 = COLOR_WHITE; d.speedLabel.Text = "Vel: 0" end
+
 	-- debug print uma vez por vehicle
 	if d.vehicle and vehicleData[d.vehicle] and not vehicleData[d.vehicle].printedSourceInfo then
-		local vd = vehicleData[d.vehicle]
-		vehicleData[d.vehicle].printedSourceInfo = true
-		if vd.source then
-			print(("[SpeedHUD] Fonte do veículo %s: %s"):format(d.vehicle:GetFullName(), tostring(vd.source.type == "ChildValue" and vd.source.obj:GetFullName() or (vd.source.key or "unknown"))))
-		else
-			print(("[SpeedHUD] Veículo %s: nenhuma fonte detectada (usando físico)"):format(d.vehicle:GetFullName()))
-		end
+		local vd = vehicleData[d.vehicle]; vehicleData[d.vehicle].printedSourceInfo = true
+		if vd.source then print(("[SpeedHUD] Fonte do veículo %s: %s"):format(d.vehicle:GetFullName(), tostring(vd.source.type == "ChildValue" and vd.source.obj:GetFullName() or (vd.source.key or "unknown"))))
+		else print(("[SpeedHUD] Veículo %s: nenhuma fonte detectada (usando físico)"):format(d.vehicle:GetFullName())) end
 	end
 end
 
@@ -274,13 +286,13 @@ local function ensureRefsForPlayer(player, d, seat)
 	if d.vehicle then monitorVehicle(d.vehicle) end
 end
 
+-- Refresh drivers (cria/destroi) - chamada periódica
 local function refreshDrivers()
 	for _,pl in ipairs(Players:GetPlayers()) do
 		local ok, seat = pcall(isPlayerDriving, pl)
 		if ok and seat then
-			local d = createBillboardForPlayer(pl, seat)
-			if d then ensureRefsForPlayer(pl, d, seat) end
-			if d and d.billboard then d.billboard.Enabled = enabled end
+			local d, reason = createBillboardForPlayer(pl, seat)
+			if d then ensureRefsForPlayer(pl, d, seat); if d.billboard then d.billboard.Enabled = enabled end end
 		else
 			if guiByPlayer[pl] then removeBillboardForPlayer(pl) end
 		end
@@ -288,7 +300,30 @@ local function refreshDrivers()
 	for veh,vd in pairs(vehicleData) do if not veh.Parent then cleanupVehicle(veh) end end
 end
 
--- main loop
+-- ATIVAÇÃO IMEDIATA: quando o usuário clica ON chamamos isso para debug
+local function activateImmediate()
+	print("[SpeedHUD] tentando ativar HUDs para todos os players...")
+	if not GuiParent then warn("[SpeedHUD] GuiParent nil — HUDs não podem ser criados") end
+	for _,pl in ipairs(Players:GetPlayers()) do
+		local ok, seat = pcall(isPlayerDriving, pl)
+		if ok and seat then
+			local d, reason = createBillboardForPlayer(pl, seat)
+			if d then
+				ensureRefsForPlayer(pl, d, seat)
+				if d.billboard then d.billboard.Enabled = true end
+				print(("[SpeedHUD] HUD criado para %s (seat: %s) -> %s"):format(pl.Name, tostring(seat:GetFullName()), tostring(reason)))
+			else
+				print(("[SpeedHUD] Não foi possível criar HUD para %s (reason: %s)"):format(pl.Name, tostring(reason)))
+			end
+		else
+			print(("[SpeedHUD] %s não está dirigindo (ou erro: %s)"):format(pl.Name, tostring(seat)))
+			-- removemos caso exista por segurança
+			if guiByPlayer[pl] then removeBillboardForPlayer(pl) end
+		end
+	end
+end
+
+-- loop principal
 local refreshTimer = 0
 RunService.RenderStepped:Connect(function(dt)
 	refreshTimer = refreshTimer + dt
@@ -297,22 +332,52 @@ RunService.RenderStepped:Connect(function(dt)
 	for pl,d in pairs(guiByPlayer) do pcall(updateGuiForPlayer, pl, d) end
 end)
 
--- players cleanup
 Players.PlayerRemoving:Connect(function(p) removeBillboardForPlayer(p) end)
 
--- ========== Toggle DRAGGABLE (corrigido) ==========
+-- Pequena notificação na tela
+local function showNotification(text, timeSec)
+	if not GuiParent then return end
+	local ok, sg = pcall(function()
+		local s = Instance.new("ScreenGui")
+		s.Name = "SpeedHUD_Notice"
+		s.ResetOnSpawn = false
+		s.Parent = GuiParent
+		return s
+	end)
+	if not ok or not sg then return end
+	local frame = Instance.new("Frame")
+	frame.Size = UDim2.new(0,220,0,40)
+	frame.Position = UDim2.new(0.5, -110, 0.05, 0)
+	frame.BackgroundColor3 = Color3.fromRGB(25,25,25)
+	frame.BackgroundTransparency = 0.2
+	frame.BorderSizePixel = 0
+	frame.Parent = sg
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(1,0,1,0)
+	label.BackgroundTransparency = 1
+	label.Font = Enum.Font.SourceSansBold
+	label.TextSize = 18
+	label.TextColor3 = Color3.fromRGB(255,255,255)
+	label.Text = text
+	label.Parent = frame
+	spawn(function()
+		wait(timeSec or 1.6)
+		pcall(function() sg:Destroy() end)
+	end)
+end
+
+-- Toggle draggável (corrigido) - usa TextButton e chama activateImmediate() quando ligado
 local function createDraggableToggle()
 	if not GuiParent then warn("[SpeedHUD] toggle: GuiParent nil"); return end
 	local ok, sg = pcall(function()
 		local s = Instance.new("ScreenGui")
-		s.Name = "SpeedHUD_ToggleGui_v3"
+		s.Name = "SpeedHUD_ToggleGui_v4"
 		s.ResetOnSpawn = false
 		s.Parent = GuiParent
 		return s
 	end)
 	if not ok or not sg then warn("[SpeedHUD] Falha criar ScreenGui do toggle:", sg); return end
 
-	-- botão (TextButton) dentro do ScreenGui
 	local btn = Instance.new("TextButton")
 	btn.Name = "SpeedToggle"
 	btn.Size = UDim2.new(0, 64, 0, 64)
@@ -328,7 +393,6 @@ local function createDraggableToggle()
 	btn.Parent = sg
 	btn.Active = true
 
-	-- drag vars
 	local dragging = false
 	local dragInput = nil
 	local dragStart = nil
@@ -354,9 +418,7 @@ local function createDraggableToggle()
 	end)
 
 	btn.InputChanged:Connect(function(input)
-		if input == dragInput then
-			updatePosition(input)
-		end
+		if input == dragInput then updatePosition(input) end
 	end)
 
 	UserInputService.InputChanged:Connect(function(input)
@@ -368,9 +430,7 @@ local function createDraggableToggle()
 			dragging = false
 			dragInput = nil
 			local duration = tick() - touchStartTime
-			-- Se não houve movimento significativo e foi rápido -> considerar tap -> toggle
 			local wasTap = (not moved) and (duration < 0.35)
-			-- Também considerar pequeno movimento como tap (threshold)
 			if not wasTap and moved then
 				local delta = (input.Position - dragStart).Magnitude
 				if delta < 8 and duration < 0.35 then wasTap = true end
@@ -380,16 +440,18 @@ local function createDraggableToggle()
 				enabled = not enabled
 				btn.Text = enabled and "ON" or "OFF"
 				if enabled then
+					showNotification("SpeedHUD: ON", 1.4)
 					print("[SpeedHUD] ativado via toggle")
 					pcall(refreshDrivers)
-					for _,d in pairs(guiByPlayer) do if d and d.billboard then d.billboard.Enabled = true end end
+					activateImmediate()
 				else
+					showNotification("SpeedHUD: OFF", 1.2)
 					print("[SpeedHUD] desativado via toggle")
 					for _,d in pairs(guiByPlayer) do if d and d.billboard then d.billboard.Enabled = false end end
 				end
 			end
 
-			-- clamp position to visible area
+			-- clamp
 			local screenX = GuiParent.AbsoluteSize and GuiParent.AbsoluteSize.X or 1920
 			local screenY = GuiParent.AbsoluteSize and GuiParent.AbsoluteSize.Y or 1080
 			local x = math.clamp(btn.Position.X.Offset, 0, math.max(0, screenX - btn.AbsoluteSize.X))
@@ -398,26 +460,25 @@ local function createDraggableToggle()
 		end
 	end)
 
-	-- também responde a teclado/mouse Activated para casos que não disparem InputEnded
 	btn.Activated:Connect(function()
-		-- Activated can fire on both click and touch; ensure we don't double-toggle after a drag:
-		-- If currently dragging, ignore activated (dragging flag handled by InputBegan/InputEnded)
+		-- Activated pode disparar em alguns casos; evita duplo toggle durante drag
 		if dragging then return end
-		-- toggle
 		enabled = not enabled
 		btn.Text = enabled and "ON" or "OFF"
 		if enabled then
+			showNotification("SpeedHUD: ON", 1.4)
 			print("[SpeedHUD] ativado via Activated")
 			pcall(refreshDrivers)
-			for _,d in pairs(guiByPlayer) do if d and d.billboard then d.billboard.Enabled = true end end
+			activateImmediate()
 		else
+			showNotification("SpeedHUD: OFF", 1.2)
 			print("[SpeedHUD] desativado via Activated")
 			for _,d in pairs(guiByPlayer) do if d and d.billboard then d.billboard.Enabled = false end end
 		end
 	end)
 end
 
--- inicializa (toggle criado, drivers refresh feito mas HUDs permanecem OFF até clicar)
+-- init
 createDraggableToggle()
 pcall(refreshDrivers)
-print("[SpeedHUD] carregado (inicialmente OFF). Arraste o botão e toque para ativar.")
+print("[SpeedHUD] carregado (inicialmente OFF). Clique no botão para ligar.")
