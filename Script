@@ -1,6 +1,6 @@
 --[[
 Velocímetro Brookhaven - Todos os jogadores
-Nick branco, "Vel: " branco
+Nick e "Vel:" em branco
 Número verde até 100, vermelho + ⚠️ a partir de 101
 Botão On/Off arrastável
 ]]
@@ -22,6 +22,7 @@ Frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 Frame.Parent = ScreenGui
 Frame.Active = true
 Frame.Draggable = true
+Frame.Visible = false
 
 -- Botão On/Off
 local Button = Instance.new("TextButton")
@@ -72,18 +73,16 @@ local labels = {}
 
 local function updateLabels()
     for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= player then
-            if not labels[plr] then
-                local lbl = Instance.new("TextLabel")
-                lbl.Size = UDim2.new(1, 0, 0, 30)
-                lbl.BackgroundTransparency = 1
-                lbl.TextScaled = true
-                lbl.Font = Enum.Font.SourceSansBold
-                lbl.TextColor3 = Color3.fromRGB(0, 255, 0)
-                lbl.TextXAlignment = Enum.TextXAlignment.Left
-                lbl.Parent = Frame
-                labels[plr] = lbl
-            end
+        if not labels[plr] then
+            local lbl = Instance.new("TextLabel")
+            lbl.Size = UDim2.new(1, 0, 0, 30)
+            lbl.BackgroundTransparency = 1
+            lbl.TextScaled = true
+            lbl.Font = Enum.Font.SourceSansBold
+            lbl.TextXAlignment = Enum.TextXAlignment.Left
+            lbl.RichText = true
+            lbl.Parent = Frame
+            labels[plr] = lbl
         end
     end
 end
@@ -95,14 +94,14 @@ local function refreshVel()
         if plr.Character then
             local speed = getCarSpeedValue(plr.Character)
             local warning = ""
-            local numColor = Color3.fromRGB(0, 255, 0)
+            local numColor = "00FF00" -- verde até 100
             if speed >= 101 then
-                numColor = Color3.fromRGB(255, 0, 0)
+                numColor = "FF0000" -- vermelho
                 warning = " ⚠️"
             end
             lbl.Position = UDim2.new(0, 0, 0, y)
-            lbl.Text = string.format("<font color='white'>%s</font>  Vel: <font color='#%02X%02X%02X'>%d%s</font>",
-                plr.Name, numColor.R*255, numColor.G*255, numColor.B*255, math.floor(speed), warning)
+            -- Nick e Vel: branco, número colorido
+            lbl.Text = string.format("<font color='white'>%s  Vel: </font><font color='#%s'>%d%s</font>", plr.Name, numColor, math.floor(speed), warning)
             y = y + 30
         end
     end
