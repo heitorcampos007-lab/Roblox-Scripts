@@ -1,7 +1,7 @@
 -- ===========================================
 -- Script - Kart Brookhaven 🏁
 -- Velocímetro + Cronômetro
--- Botões deslizantes ON/OFF
+-- Botões deslizantes ON/OFF funcionais
 -- Painéis arrastáveis e minimização animada
 -- ===========================================
 
@@ -90,7 +90,7 @@ makeDraggable(painel)
 local titulo = Instance.new("TextLabel", painel)
 titulo.Text = "Script - Kart Brookhaven 🏁"
 titulo.Size = UDim2.fromOffset(250,30)
-titulo.Position = UDim2.fromOffset(10,40)
+titulo.Position = UDim2.fromOffset(10,50)
 titulo.BackgroundTransparency = 1
 titulo.TextColor3 = Color3.new(1,1,1)
 titulo.TextScaled = true
@@ -98,7 +98,7 @@ titulo.TextScaled = true
 -- Botão X (minimizar totalmente)
 local btnX = Instance.new("TextButton", painel)
 btnX.Size = UDim2.fromOffset(24,24)
-btnX.Position = UDim2.new(1,-30,0,5)
+btnX.Position = UDim2.new(1,-30,0,10)
 btnX.Text = "X"
 btnX.Font = Enum.Font.SourceSansBold
 btnX.TextSize = 18
@@ -109,7 +109,7 @@ Instance.new("UICorner", btnX).CornerRadius = UDim.new(1,0)
 -- Botão - (minimizar parcialmente)
 local btnMin = Instance.new("TextButton", painel)
 btnMin.Size = UDim2.fromOffset(24,24)
-btnMin.Position = UDim2.new(1,-60,0,5)
+btnMin.Position = UDim2.new(1,-60,0,10)
 btnMin.Text = "-"
 btnMin.Font = Enum.Font.SourceSansBold
 btnMin.TextSize = 18
@@ -161,9 +161,33 @@ local function createSwitch(parent, text, posY)
 			update()
 			if text == "Velocímetro" then
 				velEnabled = state
-			else
-				chronoEnabled = state
-				if state then chronoPanel.Visible = true else chronoPanel.Visible = false end
+				if not state then
+					for _,d in pairs(meters) do
+						if d.gui then d.gui:Destroy() end
+					end
+					meters = {}
+				else
+					for _,p in pairs(Players:GetPlayers()) do
+						if p.Character then
+							local hrp = p.Character:FindFirstChild("HumanoidRootPart")
+							if hrp and not hrp:FindFirstChild("SpeedMeter") then
+								local bb = Instance.new("BillboardGui", hrp)
+								bb.Name = "SpeedMeter"
+								bb.Size = UDim2.new(0,140,0,35)
+								bb.StudsOffset = Vector3.new(0,3,0)
+								bb.AlwaysOnTop = true
+								local txt = Instance.new("TextLabel", bb)
+								txt.Size = UDim2.new(1,0,1,0)
+								txt.BackgroundTransparency = 1
+								txt.Font = Enum.Font.SourceSansBold
+								txt.TextScaled = true
+								meters[p] = { gui = bb, label = txt }
+							end
+						end
+					end
+				end
+			elseif text == "Cronômetro" then
+				chronoPanel.Visible = state
 			end
 		end
 	end)
@@ -250,48 +274,10 @@ RunService.RenderStepped:Connect(function(dt)
 end)
 
 -- ===============================
--- Velocímetro acima dos jogadores
+-- ATUALIZA VELOCIDADE DOS JOGADORES
 -- ===============================
-local function createMeter(player)
-	local character = player.Character
-	if not character or not character:FindFirstChild("HumanoidRootPart") then return end
-
-	local hrp = character.HumanoidRootPart
-	local bb = Instance.new("BillboardGui", hrp)
-	bb.Name = "SpeedMeter"
-	bb.Size = UDim2.new(0,140,0,35)
-	bb.StudsOffset = Vector3.new(0,3,0)
-	bb.AlwaysOnTop = true
-
-	local txt = Instance.new("TextLabel", bb)
-	txt.Size = UDim2.new(1,0,1,0)
-	txt.BackgroundTransparency = 1
-	txt.Font = Enum.Font.SourceSansBold
-	txt.TextScaled = true
-
-	meters[player] = { gui = bb, label = txt }
-end
-
-Players.PlayerAdded:Connect(function(p)
-	p.CharacterAdded:Connect(function()
-		if velEnabled then createMeter(p) end
-	end)
-end)
-
-for _,p in pairs(Players:GetPlayers()) do
-	if p.Character then createMeter(p) end
-end
-
--- Atualiza velocidade
 RunService.RenderStepped:Connect(function(dt)
-	if not velEnabled then
-		for _,d in pairs(meters) do
-			if d.gui then d.gui:Destroy() end
-		end
-		meters = {}
-		return
-	end
-
+	if not velEnabled then return end
 	for p,d in pairs(meters) do
 		local speed = getCarSpeedValue(p.Character)
 		if speed <= 100 then
