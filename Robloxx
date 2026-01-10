@@ -1,0 +1,51 @@
+-- Atualizar velocímetros com Nick + Avatar
+RunService.RenderStepped:Connect(function()
+	if not state then return end
+	for _,p in pairs(Players:GetPlayers()) do
+		if p.Character then
+			local hrp = p.Character:FindFirstChild("HumanoidRootPart")
+			if hrp and not hrp:FindFirstChild("SpeedMeter") then
+				local bb = Instance.new("BillboardGui", hrp)
+				bb.Name = "SpeedMeter"
+				bb.Size = UDim2.new(0,180,0,50)
+				bb.StudsOffset = Vector3.new(0,3,0)
+				bb.AlwaysOnTop = true
+
+				local frame = Instance.new("Frame", bb)
+				frame.Size = UDim2.new(1,0,1,0)
+				frame.BackgroundTransparency = 1
+
+				-- Imagem do avatar
+				local avatar = Instance.new("ImageLabel", frame)
+				avatar.Size = UDim2.new(0,32,0,32)
+				avatar.Position = UDim2.new(0,2,0,9)
+				avatar.BackgroundTransparency = 1
+				avatar.Image = Players:GetUserThumbnailAsync(p.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48)
+
+				-- Label com Nick + Vel
+				local txt = Instance.new("TextLabel", frame)
+				txt.Size = UDim2.new(1,-40,1,0)
+				txt.Position = UDim2.new(0,36,0,0)
+				txt.BackgroundTransparency = 1
+				txt.Font = Enum.Font.SourceSansBold
+				txt.TextScaled = true
+				txt.TextXAlignment = Enum.TextXAlignment.Left
+
+				meters[p] = { gui = bb, label = txt }
+			end
+		end
+	end
+
+	for p,d in pairs(meters) do
+		if p.Character then
+			local speed = getCarSpeedValue(p.Character)
+			if speed <= 100 then
+				d.label.Text = p.Name.."\nVel: "..speed
+				d.label.TextColor3 = Color3.fromRGB(0,255,0)
+			else
+				d.label.Text = p.Name.."\nVel: "..speed.." ⚠️"
+				d.label.TextColor3 = Color3.fromRGB(255,0,0)
+			end
+		end
+	end
+end)
