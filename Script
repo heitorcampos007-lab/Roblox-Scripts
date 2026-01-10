@@ -1,9 +1,9 @@
--- =================================
+-- ===========================================
 -- Script - Kart Brookhaven 🏁
 -- Velocímetro + Cronômetro
--- Dois botões deslizantes ON/OFF
--- Painéis arrastáveis, X e -
--- =================================
+-- Botões deslizantes ON/OFF
+-- Painéis arrastáveis e minimização animada
+-- ===========================================
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
