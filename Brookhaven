@@ -1,0 +1,280 @@
+-- ===========================================
+-- Script - Kart Brookhaven 🏁
+-- Velocímetro + Cronômetro funcional
+-- ===========================================
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+
+-- ===============================
+-- Função para arrastar qualquer Frame
+-- ===============================
+local function makeDraggable(frame)
+	local dragging, dragStart, startPos
+	frame.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = true
+			dragStart = input.Position
+			startPos = frame.Position
+			input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then
+					dragging = false
+				end
+			end)
+		end
+	end)
+	frame.InputChanged:Connect(function(input)
+		if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+			local delta = input.Position - dragStart
+			frame.Position = UDim2.new(
+				startPos.X.Scale,
+				startPos.X.Offset + delta.X,
+				startPos.Y.Scale,
+				startPos.Y.Offset + delta.Y
+			)
+		end
+	end)
+end
+
+-- ===============================
+-- Função para pegar velocidade do veículo
+-- ===============================
+local function getCarSpeed(character)
+	if not character then return 0 end
+	local humanoid = character:FindFirstChildWhichIsA("Humanoid")
+	if not humanoid then return 0 end
+	local seat = humanoid.SeatPart
+	if not seat then return 0 end
+	local carModel = seat:FindFirstAncestorWhichIsA("Model")
+	if not carModel then return 0 end
+	for _, obj in ipairs(carModel:GetDescendants()) do
+		if obj:IsA("NumberValue") and obj.Name:lower():find("speed") then
+			return obj.Value
+		end
+	end
+	return 0
+end
+
+-- ===============================
+-- Variáveis de controle
+-- ===============================
+local velEnabled = false
+local chronoEnabled = false
+local chronoRunning = false
+local chronoTime = 0
+local meters = {}
+
+-- ===============================
+-- GUI principal
+-- ===============================
+local gui = Instance.new("ScreenGui", game.CoreGui)
+gui.Name = "KartPanelGUI"
+gui.ResetOnSpawn = false
+
+-- Painel principal
+local painel = Instance.new("Frame", gui)
+painel.Size = UDim2.fromOffset(300,220)
+painel.Position = UDim2.fromScale(0.05,0.5)
+painel.BackgroundColor3 = Color3.fromRGB(0,0,0)
+Instance.new("UICorner", painel).CornerRadius = UDim.new(0,12)
+makeDraggable(painel)
+
+-- Título
+local titulo = Instance.new("TextLabel", painel)
+titulo.Text = "Script - Kart Brookhaven 🏁"
+titulo.Size = UDim2.fromOffset(250,30)
+titulo.Position = UDim2.fromOffset(10,50)
+titulo.BackgroundTransparency = 1
+titulo.TextColor3 = Color3.new(1,1,1)
+titulo.TextScaled = true
+
+-- X e - para minimizar
+local btnX = Instance.new("TextButton", painel)
+btnX.Size = UDim2.fromOffset(24,24)
+btnX.Position = UDim2.new(1,-30,0,10)
+btnX.Text = "X"
+btnX.Font = Enum.Font.SourceSansBold
+btnX.TextSize = 18
+btnX.TextColor3 = Color3.new(1,1,1)
+btnX.BackgroundColor3 = Color3.fromRGB(30,30,30)
+Instance.new("UICorner", btnX).CornerRadius = UDim.new(1,0)
+
+local btnMin = Instance.new("TextButton", painel)
+btnMin.Size = UDim2.fromOffset(24,24)
+btnMin.Position = UDim2.new(1,-60,0,10)
+btnMin.Text = "-"
+btnMin.Font = Enum.Font.SourceSansBold
+btnMin.TextSize = 18
+btnMin.TextColor3 = Color3.new(1,1,1)
+btnMin.BackgroundColor3 = Color3.fromRGB(30,30,30)
+Instance.new("UICorner", btnMin).CornerRadius = UDim.new(1,0)
+
+-- Função para criar switch deslizante
+local function createSwitch(parent,text,posY)
+	local frame = Instance.new("Frame", parent)
+	frame.Size = UDim2.fromOffset(60,30)
+	frame.Position = UDim2.fromScale(0.05,posY)
+	frame.BackgroundColor3 = Color3.fromRGB(130,130,130)
+	Instance.new("UICorner", frame).CornerRadius = UDim.new(1,0)
+
+	local knob = Instance.new("Frame", frame)
+	knob.Size = UDim2.fromOffset(26,26)
+	knob.Position = UDim2.fromOffset(2,2)
+	knob.BackgroundColor3 = Color3.fromRGB(240,240,240)
+	Instance.new("UICorner", knob).CornerRadius = UDim.new(1,0)
+
+	local label = Instance.new("TextLabel", parent)
+	label.Size = UDim2.fromOffset(80,30)
+	label.Position = UDim2.fromScale(0.25,posY)
+	label.BackgroundTransparency = 1
+	label.Font = Enum.Font.SourceSansBold
+	label.TextSize = 16
+	label.Text = "OFF"
+	label.TextColor3 = Color3.fromRGB(0,255,0)
+
+	local state = false
+	local function update()
+		if state then
+			frame.BackgroundColor3 = Color3.fromRGB(0,200,0)
+			knob.Position = UDim2.fromOffset(2,2)
+			label.Text = "ON"
+			label.TextColor3 = Color3.fromRGB(0,255,0)
+		else
+			frame.BackgroundColor3 = Color3.fromRGB(200,0,0)
+			knob.Position = UDim2.fromOffset(32,2)
+			label.Text = "OFF"
+			label.TextColor3 = Color3.fromRGB(0,255,0)
+		end
+	end
+
+	frame.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			state = not state
+			update()
+			if text == "Velocímetro" then
+				velEnabled = state
+				if not state then
+					for _,d in pairs(meters) do
+						if d.gui then d.gui:Destroy() end
+					end
+					meters = {}
+				end
+			elseif text == "Cronômetro" then
+				chronoEnabled = state
+				chronoPanel.Visible = state
+			end
+		end
+	end)
+	update()
+	return frame,label
+end
+
+-- Switches
+local velSwitch, velLabel = createSwitch(painel,"Velocímetro",0.3)
+local chronoSwitch, chronoLabel = createSwitch(painel,"Cronômetro",0.5)
+
+-- Painel cronômetro
+local chronoPanel = Instance.new("Frame", gui)
+chronoPanel.Size = UDim2.fromOffset(250,120)
+chronoPanel.Position = UDim2.fromScale(0.3,0.5)
+chronoPanel.BackgroundColor3 = Color3.fromRGB(0,0,0)
+Instance.new("UICorner", chronoPanel).CornerRadius = UDim.new(0,12)
+chronoPanel.Visible = false
+makeDraggable(chronoPanel)
+
+local chronoTitle = Instance.new("TextLabel", chronoPanel)
+chronoTitle.Text = "Cronômetro"
+chronoTitle.Size = UDim2.fromOffset(150,25)
+chronoTitle.Position = UDim2.fromOffset(10,10)
+chronoTitle.BackgroundTransparency = 1
+chronoTitle.TextColor3 = Color3.new(1,1,1)
+chronoTitle.TextScaled = true
+
+-- Botões cronômetro
+local btnReset = Instance.new("TextButton", chronoPanel)
+btnReset.Text = "Resetar"
+btnReset.Size = UDim2.fromOffset(80,30)
+btnReset.Position = UDim2.fromOffset(10,50)
+btnReset.BackgroundColor3 = Color3.fromRGB(150,150,150)
+Instance.new("UICorner", btnReset).CornerRadius = UDim.new(0,6)
+
+local btnStart = Instance.new("TextButton", chronoPanel)
+btnStart.Text = "Iniciar"
+btnStart.Size = UDim2.fromOffset(80,30)
+btnStart.Position = UDim2.fromOffset(150,50)
+btnStart.BackgroundColor3 = Color3.fromRGB(160,90,255)
+Instance.new("UICorner", btnStart).CornerRadius = UDim.new(0,6)
+
+local chronoLabelDisplay = Instance.new("TextLabel", chronoPanel)
+chronoLabelDisplay.Size = UDim2.fromOffset(230,30)
+chronoLabelDisplay.Position = UDim2.fromOffset(10,85)
+chronoLabelDisplay.BackgroundTransparency = 1
+chronoLabelDisplay.TextColor3 = Color3.fromRGB(255,255,255)
+chronoLabelDisplay.Font = Enum.Font.SourceSansBold
+chronoLabelDisplay.TextSize = 18
+chronoLabelDisplay.Text = "00m 00s 000ms"
+
+-- Cronômetro lógica
+btnStart.MouseButton1Click:Connect(function()
+	if chronoRunning then
+		chronoRunning = false
+		btnStart.Text = "Iniciar"
+		btnStart.BackgroundColor3 = Color3.fromRGB(160,90,255)
+	else
+		chronoRunning = true
+		btnStart.Text = "Parar"
+		btnStart.BackgroundColor3 = Color3.fromRGB(255,0,0)
+	end
+end)
+
+btnReset.MouseButton1Click:Connect(function()
+	chronoTime = 0
+	chronoLabelDisplay.Text = "00m 00s 000ms"
+end)
+
+RunService.RenderStepped:Connect(function(dt)
+	if chronoRunning then
+		chronoTime += dt
+		local mins = math.floor(chronoTime/60)
+		local secs = math.floor(chronoTime%60)
+		local ms = math.floor((chronoTime - math.floor(chronoTime))*1000)
+		chronoLabelDisplay.Text = string.format("%02dm %02ds %03dms",mins,secs,ms)
+	end
+end)
+
+-- Velocímetro lógica
+RunService.RenderStepped:Connect(function()
+	if not velEnabled then return end
+	for _,p in pairs(Players:GetPlayers()) do
+		if p.Character then
+			local hrp = p.Character:FindFirstChild("HumanoidRootPart")
+			if hrp and not hrp:FindFirstChild("SpeedMeter") then
+				local bb = Instance.new("BillboardGui", hrp)
+				bb.Name = "SpeedMeter"
+				bb.Size = UDim2.new(0,140,0,35)
+				bb.StudsOffset = Vector3.new(0,3,0)
+				bb.AlwaysOnTop = true
+				local txt = Instance.new("TextLabel", bb)
+				txt.Size = UDim2.new(1,0,1,0)
+				txt.BackgroundTransparency = 1
+				txt.Font = Enum.Font.SourceSansBold
+				txt.TextScaled = true
+				meters[p] = { gui = bb, label = txt }
+			end
+		end
+	end
+	for p,d in pairs(meters) do
+		if p.Character then
+			local speed = getCarSpeed(p.Character)
+			if speed <= 100 then
+				d.label.Text = "Vel: "..speed
+				d.label.TextColor3 = Color3.fromRGB(0,255,0)
+			else
+				d.label.Text = "Vel: "..speed.." ⚠️"
+				d.label.TextColor3 = Color3.fromRGB(255,0,0)
+			end
+		end
+	end
+end)
