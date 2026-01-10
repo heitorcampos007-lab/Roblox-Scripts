@@ -1,6 +1,7 @@
 --[[
 Teste de Velocímetro Brookhaven
-Nick branco, "Vel: " RGB, número verde/vermelho+⚠️
+Nick e "Vel: " em branco
+Número verde até 100, vermelho + ⚠️ a partir de 101
 Botão On/Off arrastável
 ]]
 
@@ -55,14 +56,6 @@ local function getCarSpeedValue(character)
     return 0
 end
 
--- Função pra gerar cor RGB dinâmica (arco-íris)
-local function RGBColor(tickTime)
-    local r = math.floor((math.sin(tickTime) * 127 + 128))
-    local g = math.floor((math.sin(tickTime + 2) * 127 + 128))
-    local b = math.floor((math.sin(tickTime + 4) * 127 + 128))
-    return string.format("#%02X%02X%02X", r, g, b)
-end
-
 -- Atualizar velocímetro
 local function updateVel()
     if not active then return end
@@ -76,10 +69,9 @@ local function updateVel()
         warning = " ⚠️"
     end
 
-    local rgbHex = RGBColor(tick()) -- cor dinâmica para "Vel: "
     VelText.Text = string.format(
-        '<font color="white">%s</font>\n<font color="%s">Vel: </font><font color="#%02X%02X%02X">%d%s</font>',
-        nick, rgbHex, numColor.R*255, numColor.G*255, numColor.B*255, math.floor(speed), warning
+        '<font color="white">%s</font>\n<font color="white">Vel: </font><font color="#%02X%02X%02X">%d%s</font>',
+        nick, numColor.R*255, numColor.G*255, numColor.B*255, math.floor(speed), warning
     )
 end
 
