@@ -1,5 +1,5 @@
 -- ===============================
--- Roblox Brookhaven - Painel Final
+-- Roblox Brookhaven - Painel Final Corrigido
 -- Velocímetro + Cronômetro
 -- Delta Executor / LocalScript
 -- ===============================
@@ -161,9 +161,6 @@ cronLabel.TextColor3 = Color3.new(1,1,1)
 cronLabel.TextScaled = true
 cronLabel.Text = "00:00:00"
 
-local tempo = 0
-local cronRunning = false
-
 local btnStartStop = Instance.new("TextButton", painelCron)
 btnStartStop.Size = UDim2.fromScale(0.4,0.35)
 btnStartStop.Position = UDim2.fromScale(0.05,0.65)
@@ -211,7 +208,6 @@ btnVel.MouseButton1Click:Connect(function()
 	btnVel.Text = velEnabled and "ON" or "OFF"
 	btnVel.BackgroundColor3 = velEnabled and Color3.fromRGB(0,120,0) or Color3.fromRGB(120,0,0)
 
-	-- Remove os metros se desligado
 	if not velEnabled then
 		for _, d in pairs(meters) do
 			if d.gui then d.gui:Destroy() end
@@ -225,17 +221,20 @@ btnCron.MouseButton1Click:Connect(function()
 	btnCron.Text = chronoEnabled and "ON" or "OFF"
 	btnCron.BackgroundColor3 = chronoEnabled and Color3.fromRGB(0,120,0) or Color3.fromRGB(120,0,0)
 	painelCron.Visible = chronoEnabled
-	if chronoEnabled then tempo = 0 end
+	if not chronoEnabled then
+		miniCron.Visible = false
+	end
+	if chronoEnabled then chronoTime = 0 end
 end)
 
 btnStartStop.MouseButton1Click:Connect(function()
-	cronRunning = not cronRunning
-	btnStartStop.Text = cronRunning and "Parar" or "Iniciar"
-	btnStartStop.BackgroundColor3 = cronRunning and Color3.fromRGB(255,0,0) or Color3.fromRGB(130,0,255)
+	chronoRunning = not chronoRunning
+	btnStartStop.Text = chronoRunning and "Parar" or "Iniciar"
+	btnStartStop.BackgroundColor3 = chronoRunning and Color3.fromRGB(255,0,0) or Color3.fromRGB(130,0,255)
 end)
 
 btnReset.MouseButton1Click:Connect(function()
-	tempo = 0
+	chronoTime = 0
 end)
 
 btnClose.MouseButton1Click:Connect(function()
@@ -314,14 +313,20 @@ RunService.RenderStepped:Connect(function(dt)
 				end
 			end
 		end
+	else
+		-- remove os metros quando desligado
+		for _, d in pairs(meters) do
+			if d.gui then d.gui:Destroy() end
+		end
+		meters = {}
 	end
 
 	-- Cronômetro
-	if chronoEnabled and cronRunning then
+	if chronoEnabled and chronoRunning then
 		chronoTime += dt
-		local minutes = math.floor(chronoTime/60)
-		local seconds = math.floor(chronoTime%60)
-		local ms = math.floor((chronoTime*100)%100)
-		cronLabel.Text = string.format("%02d:%02d:%02d",minutes,seconds,ms)
 	end
+	local minutes = math.floor(chronoTime/60)
+	local seconds = math.floor(chronoTime%60)
+	local ms = math.floor((chronoTime*100)%100)
+	cronLabel.Text = string.format("%02d:%02d:%02d",minutes,seconds,ms)
 end)
