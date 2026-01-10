@@ -29,108 +29,111 @@ button.Parent = gui
 
 local enabled = false
 button.MouseButton1Click:Connect(function()
-    enabled = not enabled
-    button.Text = enabled and "ON" or "OFF"
+enabled = not enabled
+button.Text = enabled and "ON" or "OFF"
 end)
 
 -- Criar Billboard para cada jogador
 local function createBillboard(player)
-    local billboard = Instance.new("BillboardGui")
-    billboard.Name = "SpeedBillboard"
-    billboard.Size = UDim2.new(0,150,0,50)
-    billboard.StudsOffset = Vector3.new(0,3,0)
-    billboard.AlwaysOnTop = true
-    billboard.Parent = gui
+local billboard = Instance.new("BillboardGui")
+billboard.Name = "SpeedBillboard"
+billboard.Size = UDim2.new(0,150,0,50)
+billboard.StudsOffset = Vector3.new(0,3,0)
+billboard.AlwaysOnTop = true
+billboard.Parent = gui
 
-    local frame = Instance.new("Frame")
-    frame.BackgroundTransparency = 1
-    frame.Size = UDim2.new(1,0,1,0)
-    frame.Parent = billboard
+local frame = Instance.new("Frame")  
+frame.BackgroundTransparency = 1  
+frame.Size = UDim2.new(1,0,1,0)  
+frame.Parent = billboard  
 
-    local nickLabel = Instance.new("TextLabel")
-    nickLabel.Size = UDim2.new(1,0,0.5,0)
-    nickLabel.BackgroundTransparency = 1
-    nickLabel.TextColor3 = Color3.fromRGB(255,255,255)
-    nickLabel.TextScaled = true
-    nickLabel.Font = Enum.Font.SourceSansBold
-    nickLabel.Text = player.Name
-    nickLabel.Parent = frame
+local nickLabel = Instance.new("TextLabel")  
+nickLabel.Size = UDim2.new(1,0,0.5,0)  
+nickLabel.BackgroundTransparency = 1  
+nickLabel.TextColor3 = Color3.fromRGB(255,255,255)  
+nickLabel.TextScaled = true  
+nickLabel.Font = Enum.Font.SourceSansBold  
+nickLabel.Text = player.Name  
+nickLabel.Parent = frame  
 
-    local velLabel = Instance.new("TextLabel")
-    velLabel.Size = UDim2.new(1,0,0.5,0)
-    velLabel.Position = UDim2.new(0,0,0.5,0)
-    velLabel.BackgroundTransparency = 1
-    velLabel.TextScaled = true
-    velLabel.Font = Enum.Font.SourceSansBold
-    velLabel.TextColor3 = Color3.fromRGB(255,255,255)
-    velLabel.Text = "Vel: 0"
-    velLabel.Parent = frame
+local velLabel = Instance.new("TextLabel")  
+velLabel.Size = UDim2.new(1,0,0.5,0)  
+velLabel.Position = UDim2.new(0,0,0.5,0)  
+velLabel.BackgroundTransparency = 1  
+velLabel.TextScaled = true  
+velLabel.Font = Enum.Font.SourceSansBold  
+velLabel.TextColor3 = Color3.fromRGB(255,255,255)  
+velLabel.Text = "Vel: 0"  
+velLabel.Parent = frame  
 
-    return billboard, velLabel
+return billboard, velLabel
+
 end
 
 -- Tabela de billboards
 local billboards = {}
 
 local function addPlayer(player)
-    local bb, vel = createBillboard(player)
-    billboards[player] = {billboard=bb, velLabel=vel}
+local bb, vel = createBillboard(player)
+billboards[player] = {billboard=bb, velLabel=vel}
 end
 
 for _, player in ipairs(Players:GetPlayers()) do
-    addPlayer(player)
+addPlayer(player)
 end
 Players.PlayerAdded:Connect(addPlayer)
 
--- Função CORRIGIDA para pegar a velocidade EXCLUSIVA do motorista
+-- Função para pegar a velocidade configurada do motorista
 local function getDriverSpeed(character)
-    if not character then return 0 end
-    local humanoid = character:FindFirstChildWhichIsA("Humanoid")
-    if not humanoid then return 0 end
-    local seat = humanoid.SeatPart
-    if not seat then return 0 end
+if not character then return 0 end
+local humanoid = character:FindFirstChildWhichIsA("Humanoid")
+if not humanoid then return 0 end
+local seat = humanoid.SeatPart
+if not seat then return 0 end
 
-    -- Somente se o jogador estiver dirigindo
-    if seat:IsA("VehicleSeat") and seat.Occupant == humanoid then
-        local carModel = seat:FindFirstAncestorWhichIsA("Model")
-        if not carModel then return 0 end
+-- Somente se o jogador estiver dirigindo  
+if seat:IsA("VehicleSeat") and seat.Occupant == humanoid then  
+    local carModel = seat:FindFirstAncestorWhichIsA("Model")  
+    if not carModel then return 0 end  
 
-        -- Pega apenas os NumberValues filhos DIRETOS do veículo
-        for _, obj in ipairs(carModel:GetChildren()) do
-            if obj:IsA("NumberValue") and obj.Name:lower():find("speed") then
-                return obj.Value
-            end
-        end
-    end
-    return 0
+    -- Pega apenas o NumberValue do carro deste motorista específico  
+    for _, obj in ipairs(carModel:GetDescendants()) do  
+        if obj:IsA("NumberValue") and obj.Name:lower():find("speed") then  
+            return obj.Value  
+        end  
+    end  
+end  
+return 0
+
 end
 
 -- Atualização em tempo real
 RunService.RenderStepped:Connect(function()
-    for player, data in pairs(billboards) do
-        local bb = data.billboard
-        local velLabel = data.velLabel
+for player, data in pairs(billboards) do
+local bb = data.billboard
+local velLabel = data.velLabel
 
-        if enabled and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            local speed = getDriverSpeed(player.Character)
+if enabled and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then  
+        local speed = getDriverSpeed(player.Character)  
 
-            if speed > 0 then
-                bb.Enabled = true
-                bb.Adornee = player.Character:FindFirstChild("Head") or player.Character:FindFirstChild("HumanoidRootPart")
+        if speed > 0 then  
+            bb.Enabled = true  
+            bb.Adornee = player.Character:FindFirstChild("Head") or player.Character:FindFirstChild("HumanoidRootPart")  
 
-                -- Atualizar cores
-                if speed <= 100 then
-                    velLabel.TextColor3 = Color3.fromRGB(0,255,0) -- verde
-                    velLabel.Text = "Vel: "..speed
-                else
-                    velLabel.TextColor3 = Color3.fromRGB(255,0,0) -- vermelho
-                    velLabel.Text = "Vel: "..speed.." ⚠️"
-                end
-            else
-                bb.Enabled = false
-            end
-        else
-            bb.Enabled = false
-        end
-    end
+            -- Atualizar cores  
+            if speed <= 100 then  
+                velLabel.TextColor3 = Color3.fromRGB(0,255,0) -- verde  
+                velLabel.Text = "Vel: "..speed  
+            else  
+                velLabel.TextColor3 = Color3.fromRGB(255,0,0) -- vermelho  
+                velLabel.Text = "Vel: "..speed.." ⚠️"  
+            end  
+        else  
+            bb.Enabled = false  
+        end  
+    else  
+        bb.Enabled = false  
+    end  
+end
+
 end)
