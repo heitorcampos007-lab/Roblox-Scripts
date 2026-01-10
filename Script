@@ -1,6 +1,7 @@
 --[[
 Velocímetro Brookhaven - Todos os jogadores
-Nick e "Vel:" em branco
+Mostra: Nick  Vel: Velocidade
+Nick e Vel: branco
 Número verde até 100, vermelho + ⚠️ a partir de 101
 Botão On/Off arrastável
 ]]
@@ -13,15 +14,15 @@ local player = Players.LocalPlayer
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Parent = player:WaitForChild("PlayerGui")
 
--- Frame para organizar os velocímetros
+-- Frame que vai conter todos os velocímetros
 local Frame = Instance.new("Frame")
 Frame.Size = UDim2.new(0, 250, 0, 300)
 Frame.Position = UDim2.new(0.7, 0, 0.1, 0)
 Frame.BackgroundTransparency = 0.5
 Frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 Frame.Parent = ScreenGui
-Frame.Active = true
 Frame.Draggable = true
+Frame.Active = true
 Frame.Visible = false
 
 -- Botão On/Off
@@ -31,11 +32,9 @@ Button.Position = UDim2.new(0, 50, 0, 50)
 Button.Text = "OFF"
 Button.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
 Button.Parent = ScreenGui
-Button.Active = true
 Button.Draggable = true
 
 local active = false
-
 Button.MouseButton1Click:Connect(function()
     active = not active
     Frame.Visible = active
@@ -48,7 +47,7 @@ Button.MouseButton1Click:Connect(function()
     end
 end)
 
--- Função para pegar velocidade de um jogador
+-- Função para pegar a velocidade de um jogador
 local function getCarSpeedValue(character)
     if not character then return 0 end
     local humanoid = character:FindFirstChildOfClass("Humanoid")
@@ -58,17 +57,14 @@ local function getCarSpeedValue(character)
     local carModel = seat:FindFirstAncestorOfClass("Model")
     if not carModel then return 0 end
     for _, obj in ipairs(carModel:GetDescendants()) do
-        if obj:IsA("NumberValue") then
-            local name = obj.Name:lower()
-            if name:find("speed") or name:find("velocity") then
-                return obj.Value
-            end
+        if obj:IsA("NumberValue") and (obj.Name:lower():find("speed") or obj.Name:lower():find("velocity")) then
+            return obj.Value
         end
     end
     return 0
 end
 
--- Criar labels para cada jogador
+-- Criar labels por jogador
 local labels = {}
 
 local function updateLabels()
@@ -100,7 +96,6 @@ local function refreshVel()
                 warning = " ⚠️"
             end
             lbl.Position = UDim2.new(0, 0, 0, y)
-            -- Nick e Vel: branco, número colorido
             lbl.Text = string.format("<font color='white'>%s  Vel: </font><font color='#%s'>%d%s</font>", plr.Name, numColor, math.floor(speed), warning)
             y = y + 30
         end
