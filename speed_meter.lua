@@ -1,5 +1,6 @@
 -- ===============================
--- Roblox Brookhaven - Painel Velocímetro + Cronômetro
+-- Roblox Brookhaven - Painel Final
+-- Velocímetro + Cronômetro
 -- Delta Executor / LocalScript
 -- ===============================
 
@@ -14,7 +15,6 @@ local LocalPlayer = Players.LocalPlayer
 -- ===============================
 local function makeDraggable(frame)
 	local dragging, dragStart, startPos
-
 	frame.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
 			dragging = true
@@ -27,7 +27,6 @@ local function makeDraggable(frame)
 			end)
 		end
 	end)
-
 	frame.InputChanged:Connect(function(input)
 		if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
 			local delta = input.Position - dragStart
@@ -71,7 +70,7 @@ gui.ResetOnSpawn = false
 
 -- Painel Principal
 local painel = Instance.new("Frame", gui)
-painel.Size = UDim2.fromScale(0.28, 0.3)
+painel.Size = UDim2.fromOffset(280,140)
 painel.Position = UDim2.fromScale(0.05,0.55)
 painel.BackgroundColor3 = Color3.fromRGB(15,15,15)
 painel.BorderSizePixel = 0
@@ -81,7 +80,7 @@ makeDraggable(painel)
 -- Título
 local titulo = Instance.new("TextLabel", painel)
 titulo.Text = "Painel - Kart Brookhaven 🏁"
-titulo.Size = UDim2.fromScale(1,0.15)
+titulo.Size = UDim2.fromScale(1,0.2)
 titulo.BackgroundTransparency = 1
 titulo.TextColor3 = Color3.new(1,1,1)
 titulo.TextScaled = true
@@ -89,29 +88,11 @@ titulo.TextScaled = true
 -- Botão X
 local btnClose = Instance.new("TextButton", painel)
 btnClose.Text = "X"
-btnClose.Size = UDim2.fromScale(0.08,0.15)
-btnClose.Position = UDim2.fromScale(0.92,0.025)
+btnClose.Size = UDim2.fromScale(0.08,0.2)
+btnClose.Position = UDim2.fromScale(0.92,0)
 btnClose.BackgroundTransparency = 1
 btnClose.TextColor3 = Color3.new(1,1,1)
 btnClose.TextScaled = true
-
--- Nick do Player
-local nickLabel = Instance.new("TextLabel", painel)
-nickLabel.Position = UDim2.fromScale(0,0.15)
-nickLabel.Size = UDim2.fromScale(1,0.1)
-nickLabel.BackgroundTransparency = 1
-nickLabel.TextColor3 = Color3.new(1,1,1)
-nickLabel.TextScaled = true
-nickLabel.Text = LocalPlayer.Name
-
--- Velocidade
-local velLabel = Instance.new("TextLabel", painel)
-velLabel.Position = UDim2.fromScale(0,0.25)
-velLabel.Size = UDim2.fromScale(1,0.1)
-velLabel.BackgroundTransparency = 1
-velLabel.TextScaled = true
-velLabel.TextColor3 = Color3.fromRGB(0,255,0)
-velLabel.Text = "Vel: 0"
 
 -- ===============================
 -- BOTÕES ON/OFF
@@ -142,14 +123,14 @@ local function criarToggle(texto, posY)
 	return btn
 end
 
-local btnVel = criarToggle("Velocímetro",0.4)
+local btnVel = criarToggle("Velocímetro",0.3)
 local btnCron = criarToggle("Cronômetro",0.55)
 
 -- ===============================
 -- PAINEL DO CRONÔMETRO
 -- ===============================
 local painelCron = Instance.new("Frame", gui)
-painelCron.Size = UDim2.fromScale(0.25,0.2)
+painelCron.Size = UDim2.fromOffset(220,80) -- menor tamanho
 painelCron.Position = UDim2.fromScale(0.4,0.5)
 painelCron.BackgroundColor3 = Color3.fromRGB(15,15,15)
 painelCron.BorderSizePixel = 0
@@ -159,22 +140,22 @@ painelCron.Visible = false
 
 local tituloCron = Instance.new("TextLabel", painelCron)
 tituloCron.Text = "Cronômetro"
-tituloCron.Size = UDim2.fromScale(1,0.2)
+tituloCron.Size = UDim2.fromScale(1,0.3)
 tituloCron.BackgroundTransparency = 1
 tituloCron.TextColor3 = Color3.new(1,1,1)
 tituloCron.TextScaled = true
 
 local btnCloseCron = Instance.new("TextButton", painelCron)
 btnCloseCron.Text = "X"
-btnCloseCron.Size = UDim2.fromScale(0.1,0.2)
+btnCloseCron.Size = UDim2.fromScale(0.1,0.3)
 btnCloseCron.Position = UDim2.fromScale(0.9,0)
 btnCloseCron.BackgroundTransparency = 1
 btnCloseCron.TextColor3 = Color3.new(1,1,1)
 btnCloseCron.TextScaled = true
 
 local cronLabel = Instance.new("TextLabel", painelCron)
-cronLabel.Position = UDim2.fromScale(0,0.25)
-cronLabel.Size = UDim2.fromScale(1,0.7)
+cronLabel.Position = UDim2.fromScale(0,0.3)
+cronLabel.Size = UDim2.fromScale(1,0.4)
 cronLabel.BackgroundTransparency = 1
 cronLabel.TextColor3 = Color3.new(1,1,1)
 cronLabel.TextScaled = true
@@ -184,16 +165,16 @@ local tempo = 0
 local cronRunning = false
 
 local btnStartStop = Instance.new("TextButton", painelCron)
-btnStartStop.Size = UDim2.fromScale(0.4,0.25)
-btnStartStop.Position = UDim2.fromScale(0.05,0.7)
+btnStartStop.Size = UDim2.fromScale(0.4,0.35)
+btnStartStop.Position = UDim2.fromScale(0.05,0.65)
 btnStartStop.Text = "Iniciar"
 btnStartStop.BackgroundColor3 = Color3.fromRGB(130,0,255)
 btnStartStop.TextColor3 = Color3.new(1,1,1)
 Instance.new("UICorner", btnStartStop)
 
 local btnReset = Instance.new("TextButton", painelCron)
-btnReset.Size = UDim2.fromScale(0.4,0.25)
-btnReset.Position = UDim2.fromScale(0.55,0.7)
+btnReset.Size = UDim2.fromScale(0.4,0.35)
+btnReset.Position = UDim2.fromScale(0.55,0.65)
 btnReset.Text = "Resetar"
 btnReset.BackgroundColor3 = Color3.fromRGB(100,100,100)
 btnReset.TextColor3 = Color3.new(1,1,1)
@@ -203,8 +184,8 @@ Instance.new("UICorner", btnReset)
 -- CÍRCULOS MINIMIZADOS
 -- ===============================
 local miniPainel = Instance.new("TextButton", gui)
-miniPainel.Size = UDim2.fromScale(0.06,0.1)
-miniPainel.Position = UDim2.fromScale(0.05,0.8)
+miniPainel.Size = UDim2.fromOffset(50,50)
+miniPainel.Position = painel.Position
 miniPainel.BackgroundColor3 = Color3.new(0,0,0)
 miniPainel.Text = "🏁"
 miniPainel.TextScaled = true
@@ -213,8 +194,8 @@ Instance.new("UICorner", miniPainel).CornerRadius = UDim.new(1,0)
 makeDraggable(miniPainel)
 
 local miniCron = Instance.new("TextButton", gui)
-miniCron.Size = UDim2.fromScale(0.06,0.1)
-miniCron.Position = UDim2.fromScale(0.15,0.8)
+miniCron.Size = UDim2.fromOffset(50,50)
+miniCron.Position = painelCron.Position
 miniCron.BackgroundColor3 = Color3.new(0,0,0)
 miniCron.Text = "⏱️"
 miniCron.TextScaled = true
@@ -223,12 +204,20 @@ Instance.new("UICorner", miniCron).CornerRadius = UDim.new(1,0)
 makeDraggable(miniCron)
 
 -- ===============================
--- LOGICA BOTÕES E MINIMIZAÇÃO
+-- BOTÕES E MINIMIZAÇÃO
 -- ===============================
 btnVel.MouseButton1Click:Connect(function()
 	velEnabled = not velEnabled
 	btnVel.Text = velEnabled and "ON" or "OFF"
 	btnVel.BackgroundColor3 = velEnabled and Color3.fromRGB(0,120,0) or Color3.fromRGB(120,0,0)
+
+	-- Remove os metros se desligado
+	if not velEnabled then
+		for _, d in pairs(meters) do
+			if d.gui then d.gui:Destroy() end
+		end
+		meters = {}
+	end
 end)
 
 btnCron.MouseButton1Click:Connect(function()
@@ -250,28 +239,30 @@ btnReset.MouseButton1Click:Connect(function()
 end)
 
 btnClose.MouseButton1Click:Connect(function()
-	TweenService:Create(painel,TweenInfo.new(0.25),{Size=UDim2.fromScale(0,0)}):Play()
+	TweenService:Create(painel,TweenInfo.new(0.25),{Size=UDim2.fromOffset(0,0)}):Play()
 	task.wait(0.25)
 	painel.Visible = false
+	miniPainel.Position = painel.Position
 	miniPainel.Visible = true
 end)
 
 btnCloseCron.MouseButton1Click:Connect(function()
-	TweenService:Create(painelCron,TweenInfo.new(0.25),{Size=UDim2.fromScale(0,0)}):Play()
+	TweenService:Create(painelCron,TweenInfo.new(0.25),{Size=UDim2.fromOffset(0,0)}):Play()
 	task.wait(0.25)
 	painelCron.Visible = false
+	miniCron.Position = painelCron.Position
 	miniCron.Visible = true
 end)
 
 miniPainel.MouseButton1Click:Connect(function()
 	painel.Visible = true
-	TweenService:Create(painel,TweenInfo.new(0.25),{Size=UDim2.fromScale(0.28,0.3)}):Play()
+	TweenService:Create(painel,TweenInfo.new(0.25),{Size=UDim2.fromOffset(280,140)}):Play()
 	miniPainel.Visible = false
 end)
 
 miniCron.MouseButton1Click:Connect(function()
 	painelCron.Visible = true
-	TweenService:Create(painelCron,TweenInfo.new(0.25),{Size=UDim2.fromScale(0.25,0.2)}):Play()
+	TweenService:Create(painelCron,TweenInfo.new(0.25),{Size=UDim2.fromOffset(220,80)}):Play()
 	miniCron.Visible = false
 end)
 
@@ -279,7 +270,6 @@ end)
 -- LOOP PRINCIPAL
 -- ===============================
 RunService.RenderStepped:Connect(function(dt)
-	-- Velocímetro
 	if velEnabled then
 		for _, p in pairs(Players:GetPlayers()) do
 			if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
@@ -290,7 +280,6 @@ RunService.RenderStepped:Connect(function(dt)
 
 				local meter = meters[p]
 				if not meter then
-					-- Criar BillboardGui para cada player
 					local bb = Instance.new("BillboardGui", hrp)
 					bb.Size = UDim2.new(0,140,0,35)
 					bb.StudsOffset = Vector3.new(0,3,0)
@@ -329,11 +318,10 @@ RunService.RenderStepped:Connect(function(dt)
 
 	-- Cronômetro
 	if chronoEnabled and cronRunning then
-		tempo += dt
-		local minutes = math.floor(tempo/60)
-		local seconds = math.floor(tempo%60)
-		local ms = math.floor((tempo*100)%100)
+		chronoTime += dt
+		local minutes = math.floor(chronoTime/60)
+		local seconds = math.floor(chronoTime%60)
+		local ms = math.floor((chronoTime*100)%100)
 		cronLabel.Text = string.format("%02d:%02d:%02d",minutes,seconds,ms)
 	end
-
 end)
