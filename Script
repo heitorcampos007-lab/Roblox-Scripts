@@ -83,8 +83,8 @@ local function updatePlayerLabel(plr)
     local color = speed <= 100 and Color3.fromRGB(0,255,0) or Color3.fromRGB(255,0,0)
     local emoji = speed > 100 and " ⚠️" or ""
 
-    -- Nick e Vel em branco, só mostra a velocidade
-    label.TextLabel.Text = " \n" .. math.floor(speed) .. emoji
+    -- Sempre mostra Nick e Vel:, número da velocidade em cor e emoji
+    label.TextLabel.Text = plr.Name .. "\nVel: " .. math.floor(speed) .. emoji
     label.TextLabel.TextColor3 = color
 end
 
