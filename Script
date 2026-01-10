@@ -1,105 +1,79 @@
---// Serviços
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local player = Players.LocalPlayer
-local gui = player:WaitForChild("PlayerGui")
 
---// Função para pegar a velocidade do carro
-local function getCarSpeedValue(character)
-    if not character then return 0 end
+local enabled = true
+local labels = {}
 
-    local humanoid = character:FindFirstChildWhichIsA("Humanoid")
-    if not humanoid then return 0 end
-
-    local seat = humanoid.SeatPart
-    if not seat then return 0 end
-
-    local carModel = seat:FindFirstAncestorWhichIsA("Model")
-    if not carModel then return 0 end
-
-    for _, obj in ipairs(carModel:GetDescendants()) do
-        if obj:IsA("NumberValue") and obj.Name:lower():find("speed") then
-            if obj.Value > 0 and tick() % 1.3 > 0.15 then
-                return obj.Value
-            end
-        end
-    end
-
-    return 0
+local function getSpeed(plr)
+    local char = plr.Character
+    if not char then return 0 end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return 0 end
+    local v = hrp.Velocity
+    return math.floor(Vector3.new(v.X, 0, v.Z).Magnitude)
 end
 
---// Variável para ativar/desativar o script
-local enabled = false
-
---// Criar GUI do botão
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "SpeedMonitorGUI"
-screenGui.Parent = gui
-
-local toggleButton = Instance.new("TextButton")
-toggleButton.Size = UDim2.new(0, 150, 0, 50)
-toggleButton.Position = UDim2.new(0, 20, 0, 20)
-toggleButton.Text = "Ativar Velocidade"
-toggleButton.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
-toggleButton.TextColor3 = Color3.new(1,1,1)
-toggleButton.Parent = screenGui
-
-toggleButton.MouseButton1Click:Connect(function()
-    enabled = not enabled
-    toggleButton.Text = enabled and "Desativar Velocidade" or "Ativar Velocidade"
-end)
-
---// Tabela para armazenar os BillboardGuis de cada jogador
-local playerLabels = {}
-
---// Função para criar ou atualizar o BillboardGui
-local function updatePlayerLabel(plr)
-    if not plr.Character then return end
-    local head = plr.Character:FindFirstChild("Head")
+local function createLabel(plr)
+    local char = plr.Character
+    if not char then return end
+    local head = char:FindFirstChild("Head")
     if not head then return end
 
-    local label = playerLabels[plr]
-    if not label then
-        label = Instance.new("BillboardGui")
-        label.Size = UDim2.new(0, 150, 0, 50)
-        label.Adornee = head
-        label.AlwaysOnTop = true
-        label.StudsOffset = Vector3.new(0, 2, 0)
-        label.Parent = gui
+    if labels[plr] then labels[plr]:Destroy() end
 
-        local textLabel = Instance.new("TextLabel")
-        textLabel.Size = UDim2.new(1,0,1,0)
-        textLabel.BackgroundTransparency = 1
-        textLabel.TextScaled = true
-        textLabel.Font = Enum.Font.SourceSansBold
-        textLabel.TextStrokeTransparency = 0
-        textLabel.TextStrokeColor3 = Color3.fromRGB(0,0,0)
-        textLabel.Parent = label
+    local bb = Instance.new("BillboardGui")
+    bb.Size = UDim2.new(0, 200, 0, 60)
+    bb.StudsOffset = Vector3.new(0, 2.5, 0)
+    bb.AlwaysOnTop = true
+    bb.Parent = head -- 🔴 AQUI ESTAVA O ERRO
+    labels[plr] = bb
 
-        playerLabels[plr] = label
-    end
+    local nick = Instance.new("TextLabel")
+    nick.Size = UDim2.new(1, 0, 0.5, 0)
+    nick.BackgroundTransparency = 1
+    nick.TextScaled = true
+    nick.Font = Enum.Font.SourceSansBold
+    nick.TextStrokeTransparency = 0
+    nick.TextColor3 = Color3.new(1,1,1)
+    nick.Text = plr.Name
+    nick.Parent = bb
 
-    local speed = getCarSpeedValue(plr.Character)
-    local color = speed <= 100 and Color3.fromRGB(0,255,0) or Color3.fromRGB(255,0,0)
-    local emoji = speed > 100 and " ⚠️" or ""
-
-    -- Sempre mostra Nick e Vel:, número da velocidade em cor e emoji
-    label.TextLabel.Text = plr.Name .. "\nVel: " .. math.floor(speed) .. emoji
-    label.TextLabel.TextColor3 = color
+    local vel = Instance.new("TextLabel")
+    vel.Name = "Vel"
+    vel.Position = UDim2.new(0, 0, 0.5, 0)
+    vel.Size = UDim2.new(1, 0, 0.5, 0)
+    vel.BackgroundTransparency = 1
+    vel.TextScaled = true
+    vel.Font = Enum.Font.SourceSansBold
+    vel.TextStrokeTransparency = 0
+    vel.Parent = bb
 end
 
---// Atualização contínua
-RunService.RenderStepped:Connect(function()
-    if not enabled then
-        for _, v in pairs(playerLabels) do
-            if v then v.Enabled = false end
-        end
-        return
-    end
+Players.PlayerAdded:Connect(function(plr)
+    plr.CharacterAdded:Connect(function()
+        task.wait(1)
+        createLabel(plr)
+    end)
+end)
 
-    -- Atualiza TODOS os jogadores, incluindo você
-    for _, plr in ipairs(Players:GetPlayers()) do
-        updatePlayerLabel(plr)
-        playerLabels[plr].Enabled = true
+for _, plr in ipairs(Players:GetPlayers()) do
+    if plr.Character then
+        createLabel(plr)
+    end
+end
+
+RunService.RenderStepped:Connect(function()
+    if not enabled then return end
+
+    for plr, bb in pairs(labels) do
+        local velLabel = bb:FindFirstChild("Vel")
+        if velLabel then
+            local speed = getSpeed(plr)
+            local warn = speed >= 101 and " ⚠️" or ""
+            velLabel.Text = "Vel: " .. speed .. warn
+            velLabel.TextColor3 = speed >= 101
+                and Color3.fromRGB(255,0,0)
+                or Color3.fromRGB(0,255,0)
+        end
     end
 end)
