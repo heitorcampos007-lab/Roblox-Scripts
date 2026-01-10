@@ -1,288 +1,252 @@
--- Painel Kart Brookhaven 🏁 | Velocímetro + Cronômetro | Delta Executor
+-- Painel - Kart Brookhaven 🏁 | Speed Meter + Cronômetro | Delta Executor
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 
--- ================= VARIÁVEIS =================
-local speedEnabled = false
-local chronoEnabled = false
-local chronoRunning = false
-local chronoStart = 0
-local chronoElapsed = 0
+local enabled = false
 local meters = {}
 
--- ================= GUI BASE =================
+-- ================= GUI =================
 local ScreenGui = Instance.new("ScreenGui", game.CoreGui)
+ScreenGui.Name = "KartPanelGUI"
 ScreenGui.ResetOnSpawn = false
 
--- ================= FUNÇÃO DRAG =================
-local function makeDraggable(frame)
+-- ================= PAINEL PRINCIPAL =================
+local Panel = Instance.new("Frame", ScreenGui)
+Panel.Size = UDim2.new(0, 280, 0, 190)
+Panel.Position = UDim2.new(0.05, 0, 0.4, 0)
+Panel.BackgroundColor3 = Color3.fromRGB(10,10,10)
+Panel.BorderSizePixel = 0
+Instance.new("UICorner", Panel).CornerRadius = UDim.new(0,12)
+
+-- Drag
+do
 	local dragging, dragStart, startPos
-	frame.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+	Panel.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			dragging = true
 			dragStart = input.Position
-			startPos = frame.Position
+			startPos = Panel.Position
 		end
 	end)
 	UserInputService.InputChanged:Connect(function(input)
-		if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
 			local delta = input.Position - dragStart
-			frame.Position = UDim2.new(
-				startPos.X.Scale, startPos.X.Offset + delta.X,
-				startPos.Y.Scale, startPos.Y.Offset + delta.Y
-			)
+			Panel.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X,startPos.Y.Scale, startPos.Y.Offset + delta.Y)
 		end
 	end)
 	UserInputService.InputEnded:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			dragging = false
 		end
 	end)
 end
 
--- ================= PAINEL PRINCIPAL =================
-local Panel = Instance.new("Frame", ScreenGui)
-Panel.Size = UDim2.new(0, 300, 0, 230)
-Panel.Position = UDim2.new(0.05, 0, 0.4, 0)
-Panel.BackgroundColor3 = Color3.fromRGB(10,10,10)
-Panel.BorderSizePixel = 0
-Instance.new("UICorner", Panel).CornerRadius = UDim.new(0,12)
-makeDraggable(Panel)
-
 -- Título
 local Title = Instance.new("TextLabel", Panel)
-Title.Size = UDim2.new(1, -40, 0, 30)
-Title.Position = UDim2.new(0, 10, 0, 5)
+Title.Size = UDim2.new(1, -50, 0, 30)
+Title.Position = UDim2.new(0, 10, 0, 10)
 Title.BackgroundTransparency = 1
 Title.Text = "Painel - Kart Brookhaven 🏁"
 Title.Font = Enum.Font.SourceSansBold
 Title.TextSize = 18
-Title.TextColor3 = Color3.new(1,1,1)
+Title.TextColor3 = Color3.fromRGB(255,255,255)
 Title.TextXAlignment = Enum.TextXAlignment.Left
 
--- Botão X
-local CloseBtn = Instance.new("TextButton", Panel)
-CloseBtn.Size = UDim2.new(0, 24, 0, 24)
-CloseBtn.Position = UDim2.new(1, -30, 0, 8)
-CloseBtn.Text = "X"
-CloseBtn.Font = Enum.Font.SourceSansBold
-CloseBtn.TextSize = 16
-CloseBtn.TextColor3 = Color3.new(1,1,1)
-CloseBtn.BackgroundColor3 = Color3.fromRGB(30,30,30)
-CloseBtn.BorderSizePixel = 0
-Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(1,0)
+-- ================= VELOCÍMETRO BOX =================
+local Box = Instance.new("Frame", Panel)
+Box.Size = UDim2.new(1, -20, 0, 55)
+Box.Position = UDim2.new(0, 10, 0, 55)
+Box.BackgroundColor3 = Color3.fromRGB(45,45,45)
+Box.BorderSizePixel = 0
+Instance.new("UICorner", Box).CornerRadius = UDim.new(0,8)
 
--- Minimizado
-local Mini = Instance.new("TextButton", ScreenGui)
-Mini.Size = UDim2.new(0, 50, 0, 50)
-Mini.Text = "🏁"
-Mini.Font = Enum.Font.SourceSansBold
-Mini.TextSize = 26
-Mini.TextColor3 = Color3.new(1,1,1)
-Mini.BackgroundColor3 = Color3.fromRGB(10,10,10)
-Mini.BorderSizePixel = 0
-Mini.Visible = false
-Instance.new("UICorner", Mini).CornerRadius = UDim.new(1,0)
-makeDraggable(Mini)
+local BoxLabel = Instance.new("TextLabel", Box)
+BoxLabel.Size = UDim2.new(0.5, 0, 1, 0)
+BoxLabel.Position = UDim2.new(0, 10, 0, 0)
+BoxLabel.BackgroundTransparency = 1
+BoxLabel.Text = "Velocímetro:"
+BoxLabel.Font = Enum.Font.SourceSansBold
+BoxLabel.TextSize = 16
+BoxLabel.TextColor3 = Color3.fromRGB(255,255,255)
+BoxLabel.TextXAlignment = Enum.TextXAlignment.Left
 
-CloseBtn.MouseButton1Click:Connect(function()
-	Mini.Position = Panel.Position
-	Panel.Visible = false
-	Mini.Visible = true
-end)
+-- Estado ON/OFF
+local StateLabel = Instance.new("TextLabel", Box)
+StateLabel.Size = UDim2.new(0, 50, 1, 0)
+StateLabel.Position = UDim2.new(1, -60, 0, 0)
+StateLabel.BackgroundTransparency = 1
+StateLabel.Font = Enum.Font.SourceSansBold
+StateLabel.TextSize = 14
+StateLabel.Text = "OFF"
+StateLabel.TextColor3 = Color3.fromRGB(255,0,0)
 
-Mini.MouseButton1Click:Connect(function()
-	Panel.Position = Mini.Position
-	Panel.Visible = true
-	Mini.Visible = false
-end)
+-- Switch botão
+local SwitchBtn = Instance.new("TextButton", Box)
+SwitchBtn.Size = UDim2.new(0, 70, 0, 30)
+SwitchBtn.Position = UDim2.new(1, -150, 0.5, -15)
+SwitchBtn.Text = "ON / OFF"
+SwitchBtn.Font = Enum.Font.SourceSansBold
+SwitchBtn.TextSize = 14
+SwitchBtn.TextColor3 = Color3.fromRGB(255,255,255)
+SwitchBtn.BackgroundColor3 = Color3.fromRGB(120,120,120)
+SwitchBtn.BorderSizePixel = 0
+Instance.new("UICorner", SwitchBtn).CornerRadius = UDim.new(0,8)
 
--- ================= FUNÇÃO SWITCH =================
-local function createSwitch(parent, y, text)
-	local box = Instance.new("Frame", parent)
-	box.Size = UDim2.new(1, -20, 0, 50)
-	box.Position = UDim2.new(0, 10, 0, y)
-	box.BackgroundColor3 = Color3.fromRGB(45,45,45)
-	box.BorderSizePixel = 0
-	Instance.new("UICorner", box).CornerRadius = UDim.new(0,8)
+-- ================= BOTÃO CRONÔMETRO =================
+local ChronoBtn = Instance.new("TextButton", Panel)
+ChronoBtn.Size = UDim2.new(1, -20, 0, 40)
+ChronoBtn.Position = UDim2.new(0, 10, 0, 120)
+ChronoBtn.Text = "Cronômetro"
+ChronoBtn.Font = Enum.Font.SourceSansBold
+ChronoBtn.TextSize = 16
+ChronoBtn.TextColor3 = Color3.fromRGB(255,255,255)
+ChronoBtn.BackgroundColor3 = Color3.fromRGB(160,90,255)
+ChronoBtn.BorderSizePixel = 0
+Instance.new("UICorner", ChronoBtn).CornerRadius = UDim.new(0,10)
 
-	local label = Instance.new("TextLabel", box)
-	label.Size = UDim2.new(0.45,0,1,0)
-	label.Position = UDim2.new(0,10,0,0)
-	label.BackgroundTransparency = 1
-	label.Text = text
-	label.Font = Enum.Font.SourceSansBold
-	label.TextSize = 16
-	label.TextColor3 = Color3.new(1,1,1)
-	label.TextXAlignment = Enum.TextXAlignment.Left
-
-	local state = Instance.new("TextLabel", box)
-	state.Size = UDim2.new(0,40,1,0)
-	state.Position = UDim2.new(1,-50,0,0)
-	state.BackgroundTransparency = 1
-	state.Font = Enum.Font.SourceSansBold
-	state.TextSize = 14
-
-	local switch = Instance.new("Frame", box)
-	switch.Size = UDim2.new(0,50,0,26)
-	switch.Position = UDim2.new(1,-120,0.5,-13)
-	switch.BorderSizePixel = 0
-	Instance.new("UICorner", switch).CornerRadius = UDim.new(1,0)
-
-	local knob = Instance.new("Frame", switch)
-	knob.Size = UDim2.new(0,22,0,22)
-	knob.Position = UDim2.new(0,2,0.5,-11)
-	knob.BackgroundColor3 = Color3.fromRGB(240,240,240)
-	knob.BorderSizePixel = 0
-	Instance.new("UICorner", knob).CornerRadius = UDim.new(1,0)
-
-	return box, switch, knob, state
-end
-
--- ================= VELOCÍMETRO =================
-local speedBox, speedSwitch, speedKnob, speedState =
-	createSwitch(Panel, 45, "Velocímetro:")
-
-local function updateSpeedSwitch()
-	if speedEnabled then
-		speedSwitch.BackgroundColor3 = Color3.fromRGB(0,200,0)
-		speedKnob.Position = UDim2.new(1,-24,0.5,-11)
-		speedState.Text = "ON"
-		speedState.TextColor3 = Color3.fromRGB(0,255,0)
-	else
-		speedSwitch.BackgroundColor3 = Color3.fromRGB(200,0,0)
-		speedKnob.Position = UDim2.new(0,2,0.5,-11)
-		speedState.Text = "OFF"
-		speedState.TextColor3 = Color3.fromRGB(255,0,0)
-	end
-end
-
--- ================= CRONÔMETRO SWITCH =================
-local chronoBox, chronoSwitch, chronoKnob, chronoState =
-	createSwitch(Panel, 105, "Cronômetro:")
-
-local function updateChronoSwitch()
-	if chronoEnabled then
-		chronoSwitch.BackgroundColor3 = Color3.fromRGB(160,90,255)
-		chronoKnob.Position = UDim2.new(1,-24,0.5,-11)
-		chronoState.Text = "ON"
-		chronoState.TextColor3 = Color3.fromRGB(0,255,0)
-	else
-		chronoSwitch.BackgroundColor3 = Color3.fromRGB(130,130,130)
-		chronoKnob.Position = UDim2.new(0,2,0.5,-11)
-		chronoState.Text = "OFF"
-		chronoState.TextColor3 = Color3.fromRGB(255,0,0)
-	end
-end
-
--- ================= PAINEL CRONÔMETRO =================
+-- ================= CRONÔMETRO PAINEL =================
 local ChronoPanel = Instance.new("Frame", ScreenGui)
-ChronoPanel.Size = UDim2.new(0, 260, 0, 160)
-ChronoPanel.Position = UDim2.new(0.4, 0, 0.4, 0)
-ChronoPanel.BackgroundColor3 = Color3.fromRGB(10,10,10)
+ChronoPanel.Size = UDim2.new(0, 260, 0, 180)
+ChronoPanel.Position = UDim2.new(0.45, 0, 0.4, 0)
+ChronoPanel.BackgroundColor3 = Color3.fromRGB(0,0,0)
 ChronoPanel.BorderSizePixel = 0
 ChronoPanel.Visible = false
 Instance.new("UICorner", ChronoPanel).CornerRadius = UDim.new(0,12)
-makeDraggable(ChronoPanel)
 
-local ChronoTimeLabel = Instance.new("TextLabel", ChronoPanel)
-ChronoTimeLabel.Size = UDim2.new(1,0,0,60)
-ChronoTimeLabel.Position = UDim2.new(0,0,0,20)
-ChronoTimeLabel.BackgroundTransparency = 1
-ChronoTimeLabel.Font = Enum.Font.SourceSansBold
-ChronoTimeLabel.TextSize = 28
-ChronoTimeLabel.TextColor3 = Color3.new(1,1,1)
-ChronoTimeLabel.Text = "00h 00m 00s"
+-- Drag cronômetro
+do
+	local dragging, dragStart, startPos
+	ChronoPanel.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = true
+			dragStart = input.Position
+			startPos = ChronoPanel.Position
+		end
+	end)
+	UserInputService.InputChanged:Connect(function(input)
+		if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+			local delta = input.Position - dragStart
+			ChronoPanel.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X,startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+		end
+	end)
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+	end)
+end
 
-local StartStop = Instance.new("TextButton", ChronoPanel)
-StartStop.Size = UDim2.new(0.45,0,0,40)
-StartStop.Position = UDim2.new(0.05,0,1,-50)
-StartStop.Font = Enum.Font.SourceSansBold
-StartStop.TextSize = 16
-StartStop.TextColor3 = Color3.new(1,1,1)
-StartStop.BorderSizePixel = 0
-Instance.new("UICorner", StartStop).CornerRadius = UDim.new(0,8)
+-- Display tempo
+local TimeLabel = Instance.new("TextLabel", ChronoPanel)
+TimeLabel.Size = UDim2.new(1, 0, 0, 60)
+TimeLabel.Position = UDim2.new(0, 0, 0, 20)
+TimeLabel.BackgroundTransparency = 1
+TimeLabel.Text = "00h 00m 00ms"
+TimeLabel.Font = Enum.Font.SourceSansBold
+TimeLabel.TextSize = 28
+TimeLabel.TextColor3 = Color3.fromRGB(255,255,255)
 
+-- Botões cronômetro
 local ResetBtn = Instance.new("TextButton", ChronoPanel)
-ResetBtn.Size = UDim2.new(0.45,0,0,40)
-ResetBtn.Position = UDim2.new(0.5,0,1,-50)
+ResetBtn.Size = UDim2.new(0.45, -10, 0, 40)
+ResetBtn.Position = UDim2.new(0.05, 0, 1, -55)
 ResetBtn.Text = "Resetar Timer"
 ResetBtn.Font = Enum.Font.SourceSansBold
 ResetBtn.TextSize = 14
-ResetBtn.TextColor3 = Color3.new(1,1,1)
-ResetBtn.BackgroundColor3 = Color3.fromRGB(90,90,90)
-ResetBtn.BorderSizePixel = 0
+ResetBtn.BackgroundColor3 = Color3.fromRGB(120,120,120)
+ResetBtn.TextColor3 = Color3.fromRGB(255,255,255)
 Instance.new("UICorner", ResetBtn).CornerRadius = UDim.new(0,8)
 
--- ================= LÓGICAS =================
-speedSwitch.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 then
-		speedEnabled = not speedEnabled
-		updateSpeedSwitch()
+local StartBtn = Instance.new("TextButton", ChronoPanel)
+StartBtn.Size = UDim2.new(0.45, -10, 0, 40)
+StartBtn.Position = UDim2.new(0.5, 0, 1, -55)
+StartBtn.Text = "Iniciar"
+StartBtn.Font = Enum.Font.SourceSansBold
+StartBtn.TextSize = 14
+StartBtn.BackgroundColor3 = Color3.fromRGB(160,90,255)
+StartBtn.TextColor3 = Color3.fromRGB(255,255,255)
+Instance.new("UICorner", StartBtn).CornerRadius = UDim.new(0,8)
 
-		for _, d in pairs(meters) do
-			if d.gui then d.gui:Destroy() end
-		end
-		meters = {}
+-- ================= LÓGICA CRONÔMETRO =================
+local running = false
+local startTime = 0
+local elapsed = 0
 
-		if speedEnabled then
-			for _, p in pairs(Players:GetPlayers()) do
-				if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-					local hrp = p.Character.HumanoidRootPart
-					local bb = Instance.new("BillboardGui", hrp)
-					bb.Size = UDim2.new(0,140,0,35)
-					bb.StudsOffset = Vector3.new(0,3,0)
-					bb.AlwaysOnTop = true
-
-					local txt = Instance.new("TextLabel", bb)
-					txt.Size = UDim2.new(1,0,1,0)
-					txt.BackgroundTransparency = 1
-					txt.Font = Enum.Font.SourceSansBold
-					txt.TextScaled = true
-					txt.TextStrokeTransparency = 0
-
-					meters[p] = {gui = bb, label = txt, hrp = hrp}
-				end
-			end
-		end
+RunService.RenderStepped:Connect(function()
+	if running then
+		elapsed = tick() - startTime
+		local ms = math.floor((elapsed % 1) * 100)
+		local s = math.floor(elapsed % 60)
+		local m = math.floor(elapsed / 60)
+		TimeLabel.Text = string.format("%02dh %02dm %02dms",0,m,ms)
 	end
 end)
 
-chronoSwitch.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 then
-		chronoEnabled = not chronoEnabled
-		updateChronoSwitch()
-		ChronoPanel.Visible = chronoEnabled
-	end
-end)
-
-StartStop.MouseButton1Click:Connect(function()
-	chronoRunning = not chronoRunning
-	if chronoRunning then
-		chronoStart = tick() - chronoElapsed
-		StartStop.Text = "Parar"
-		StartStop.BackgroundColor3 = Color3.fromRGB(200,0,0)
+StartBtn.MouseButton1Click:Connect(function()
+	running = not running
+	if running then
+		startTime = tick() - elapsed
+		StartBtn.Text = "Parar"
+		StartBtn.BackgroundColor3 = Color3.fromRGB(255,0,0)
 	else
-		chronoElapsed = tick() - chronoStart
-		StartStop.Text = "Iniciar"
-		StartStop.BackgroundColor3 = Color3.fromRGB(160,90,255)
+		StartBtn.Text = "Iniciar"
+		StartBtn.BackgroundColor3 = Color3.fromRGB(160,90,255)
 	end
 end)
 
 ResetBtn.MouseButton1Click:Connect(function()
-	chronoElapsed = 0
-	chronoStart = tick()
-	ChronoTimeLabel.Text = "00h 00m 00s"
+	elapsed = 0
+	startTime = tick()
+	TimeLabel.Text = "00h 00m 00ms"
 end)
 
-RunService.RenderStepped:Connect(function()
-	if speedEnabled then
-		for _, d in pairs(meters) do
-			local raw = d.hrp.AssemblyLinearVelocity.Magnitude
-			local speed = math.floor((raw + 5) / 10) * 10
+ChronoBtn.MouseButton1Click:Connect(function()
+	ChronoPanel.Visible = not ChronoPanel.Visible
+end)
+
+-- ================= VELOCÍMETRO ESP =================
+local function createMeter(character, player)
+	local hrp = character:WaitForChild("HumanoidRootPart",5)
+	if not hrp then return end
+
+	local bb = Instance.new("BillboardGui", hrp)
+	bb.Size = UDim2.new(0,140,0,35)
+	bb.StudsOffset = Vector3.new(0,3,0)
+	bb.AlwaysOnTop = true
+
+	local txt = Instance.new("TextLabel", bb)
+	txt.Size = UDim2.new(1,0,1,0)
+	txt.BackgroundTransparency = 1
+	txt.Font = Enum.Font.SourceSansBold
+	txt.TextScaled = true
+	txt.TextStrokeTransparency = 0
+
+	meters[player] = {label = txt, lastPos = hrp.Position}
+end
+
+SwitchBtn.MouseButton1Click:Connect(function()
+	enabled = not enabled
+	StateLabel.Text = enabled and "ON" or "OFF"
+	StateLabel.TextColor3 = enabled and Color3.fromRGB(0,255,0) or Color3.fromRGB(255,0,0)
+
+	for _,v in pairs(meters) do if v.label then v.label.Parent:Destroy() end end
+	meters = {}
+
+	if enabled then
+		for _,p in pairs(Players:GetPlayers()) do
+			if p.Character then createMeter(p.Character,p) end
+		end
+	end
+end)
+
+RunService.RenderStepped:Connect(function(dt)
+	if not enabled then return end
+	for p,d in pairs(meters) do
+		if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+			local hrp = p.Character.HumanoidRootPart
+			local speed = math.floor((hrp.Position - d.lastPos).Magnitude / dt)
+			d.lastPos = hrp.Position
 
 			if speed <= 100 then
 				d.label.Text = "Vel: "..speed
@@ -293,18 +257,4 @@ RunService.RenderStepped:Connect(function()
 			end
 		end
 	end
-
-	if chronoRunning then
-		local t = tick() - chronoStart
-		local h = math.floor(t / 3600)
-		local m = math.floor((t % 3600) / 60)
-		local s = math.floor(t % 60)
-		ChronoTimeLabel.Text =
-			string.format("%02dh %02dm %02ds", h, m, s)
-	end
 end)
-
-updateSpeedSwitch()
-updateChronoSwitch()
-StartStop.Text = "Iniciar"
-StartStop.BackgroundColor3 = Color3.fromRGB(160,90,255)
