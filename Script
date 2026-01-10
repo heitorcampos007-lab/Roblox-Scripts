@@ -1,139 +1,124 @@
---[[
-🔥 Brookhaven Driver Speed Monitor – Corrigido
-Detecta a velocidade configurada do carro de cada motorista separadamente
-Botão ON/OFF arrastável
-Por Heitor
-]]
+-- Brookhaven Driver Speed Monitor (FINAL FIX)
+-- Nick + Vel por motorista (sem espelhamento)
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local LocalPlayer = Players.LocalPlayer
 
--- Criar GUI principal
-local gui = Instance.new("ScreenGui")
-gui.Name = "DriverSpeedMonitorGUI"
-gui.ResetOnSpawn = false
-gui.Parent = game:GetService("CoreGui")
-
--- Botão ON/OFF arrastável
-local button = Instance.new("TextButton")
-button.Size = UDim2.new(0,100,0,40)
-button.Position = UDim2.new(0,50,0,50)
-button.BackgroundColor3 = Color3.fromRGB(30,30,30)
-button.TextColor3 = Color3.fromRGB(255,255,255)
-button.Text = "OFF"
-button.TextScaled = true
-button.Active = true
-button.Draggable = true
-button.Parent = gui
-
-local enabled = false
-button.MouseButton1Click:Connect(function()
-enabled = not enabled
-button.Text = enabled and "ON" or "OFF"
-end)
-
--- Criar Billboard para cada jogador
-local function createBillboard(player)
-local billboard = Instance.new("BillboardGui")
-billboard.Name = "SpeedBillboard"
-billboard.Size = UDim2.new(0,150,0,50)
-billboard.StudsOffset = Vector3.new(0,3,0)
-billboard.AlwaysOnTop = true
-billboard.Parent = gui
-
-local frame = Instance.new("Frame")  
-frame.BackgroundTransparency = 1  
-frame.Size = UDim2.new(1,0,1,0)  
-frame.Parent = billboard  
-
-local nickLabel = Instance.new("TextLabel")  
-nickLabel.Size = UDim2.new(1,0,0.5,0)  
-nickLabel.BackgroundTransparency = 1  
-nickLabel.TextColor3 = Color3.fromRGB(255,255,255)  
-nickLabel.TextScaled = true  
-nickLabel.Font = Enum.Font.SourceSansBold  
-nickLabel.Text = player.Name  
-nickLabel.Parent = frame  
-
-local velLabel = Instance.new("TextLabel")  
-velLabel.Size = UDim2.new(1,0,0.5,0)  
-velLabel.Position = UDim2.new(0,0,0.5,0)  
-velLabel.BackgroundTransparency = 1  
-velLabel.TextScaled = true  
-velLabel.Font = Enum.Font.SourceSansBold  
-velLabel.TextColor3 = Color3.fromRGB(255,255,255)  
-velLabel.Text = "Vel: 0"  
-velLabel.Parent = frame  
-
-return billboard, velLabel
-
-end
-
--- Tabela de billboards
 local billboards = {}
 
-local function addPlayer(player)
-local bb, vel = createBillboard(player)
-billboards[player] = {billboard=bb, velLabel=vel}
+local function removeBillboard(player)
+	if billboards[player] then
+		billboards[player]:Destroy()
+		billboards[player] = nil
+	end
 end
 
-for _, player in ipairs(Players:GetPlayers()) do
-addPlayer(player)
-end
-Players.PlayerAdded:Connect(addPlayer)
+local function createBillboard(player, character)
+	removeBillboard(player)
 
--- Função para pegar a velocidade configurada do motorista
+	local head = character:WaitForChild("Head", 5)
+	if not head then return end
+
+	local bb = Instance.new("BillboardGui")
+	bb.Name = "SpeedBillboard"
+	bb.Size = UDim2.new(0, 160, 0, 45)
+	bb.StudsOffset = Vector3.new(0, 2.5, 0)
+	bb.AlwaysOnTop = true
+	bb.Enabled = false
+	bb.Adornee = head
+	bb.Parent = head
+
+	local frame = Instance.new("Frame", bb)
+	frame.Size = UDim2.new(1,0,1,0)
+	frame.BackgroundTransparency = 1
+
+	local nameLabel = Instance.new("TextLabel", frame)
+	nameLabel.Size = UDim2.new(1,0,0.5,0)
+	nameLabel.BackgroundTransparency = 1
+	nameLabel.TextScaled = true
+	nameLabel.Font = Enum.Font.SourceSansBold
+	nameLabel.TextColor3 = Color3.new(1,1,1)
+	nameLabel.Text = player.Name
+
+	local velLabel = Instance.new("TextLabel", frame)
+	velLabel.Position = UDim2.new(0,0,0.5,0)
+	velLabel.Size = UDim2.new(1,0,0.5,0)
+	velLabel.BackgroundTransparency = 1
+	velLabel.TextScaled = true
+	velLabel.Font = Enum.Font.SourceSansBold
+	velLabel.TextColor3 = Color3.new(1,1,1)
+	velLabel.Text = "Vel: 0"
+
+	billboards[player] = {
+		gui = bb,
+		vel = velLabel
+	}
+end
+
 local function getDriverSpeed(character)
-if not character then return 0 end
-local humanoid = character:FindFirstChildWhichIsA("Humanoid")
-if not humanoid then return 0 end
-local seat = humanoid.SeatPart
-if not seat then return 0 end
+	local humanoid = character:FindFirstChildWhichIsA("Humanoid")
+	if not humanoid then return nil end
 
--- Somente se o jogador estiver dirigindo  
-if seat:IsA("VehicleSeat") and seat.Occupant == humanoid then  
-    local carModel = seat:FindFirstAncestorWhichIsA("Model")  
-    if not carModel then return 0 end  
+	local seat = humanoid.SeatPart
+	if not seat or not seat:IsA("VehicleSeat") then return nil end
+	if seat.Occupant ~= humanoid then return nil end
 
-    -- Pega apenas o NumberValue do carro deste motorista específico  
-    for _, obj in ipairs(carModel:GetDescendants()) do  
-        if obj:IsA("NumberValue") and obj.Name:lower():find("speed") then  
-            return obj.Value  
-        end  
-    end  
-end  
-return 0
+	local car = seat:FindFirstAncestorWhichIsA("Model")
+	if not car then return nil end
 
+	for _, v in ipairs(car:GetDescendants()) do
+		if v:IsA("NumberValue") and v.Name:lower():find("speed") then
+			return v.Value
+		end
+	end
+
+	return nil
 end
 
--- Atualização em tempo real
+-- Player handlers
+local function onCharacterAdded(player, character)
+	task.wait(0.5)
+	createBillboard(player, character)
+end
+
+local function onPlayerAdded(player)
+	player.CharacterAdded:Connect(function(char)
+		onCharacterAdded(player, char)
+	end)
+
+	if player.Character then
+		onCharacterAdded(player, player.Character)
+	end
+end
+
+for _, p in ipairs(Players:GetPlayers()) do
+	onPlayerAdded(p)
+end
+Players.PlayerAdded:Connect(onPlayerAdded)
+Players.PlayerRemoving:Connect(removeBillboard)
+
+-- Update loop
 RunService.RenderStepped:Connect(function()
-for player, data in pairs(billboards) do
-local bb = data.billboard
-local velLabel = data.velLabel
+	for player, data in pairs(billboards) do
+		local char = player.Character
+		if not char then
+			data.gui.Enabled = false
+			continue
+		end
 
-if enabled and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then  
-        local speed = getDriverSpeed(player.Character)  
+		local speed = getDriverSpeed(char)
+		if speed then
+			data.gui.Enabled = true
 
-        if speed > 0 then  
-            bb.Enabled = true  
-            bb.Adornee = player.Character:FindFirstChild("Head") or player.Character:FindFirstChild("HumanoidRootPart")  
-
-            -- Atualizar cores  
-            if speed <= 100 then  
-                velLabel.TextColor3 = Color3.fromRGB(0,255,0) -- verde  
-                velLabel.Text = "Vel: "..speed  
-            else  
-                velLabel.TextColor3 = Color3.fromRGB(255,0,0) -- vermelho  
-                velLabel.Text = "Vel: "..speed.." ⚠️"  
-            end  
-        else  
-            bb.Enabled = false  
-        end  
-    else  
-        bb.Enabled = false  
-    end  
-end
-
+			if speed <= 100 then
+				data.vel.TextColor3 = Color3.fromRGB(255,255,255)
+				data.vel.Text = "Vel: "..speed
+			else
+				data.vel.TextColor3 = Color3.fromRGB(255,0,0)
+				data.vel.Text = "Vel: "..speed.." ⚠"
+			end
+		else
+			data.gui.Enabled = false
+		end
+	end
 end)
