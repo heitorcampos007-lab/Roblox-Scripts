@@ -1,7 +1,6 @@
--- SpeedHUD Delta v4
--- Versão com debug/ativação imediata: quando você clicar ON o script fará varredura e tentará criar os HUDs,
--- imprimindo no console por que cada jogador não teve HUD criado (se houver problema).
--- Execute via executor (Delta) dentro do jogo.
+-- SpeedHUD Delta (sem botão) — inicia ATIVADO imediatamente
+-- Execute pelo executor (Delta) dentro do jogo.
+-- loadstring(game:HttpGet("https://raw.githubusercontent.com/SEU_USUARIO/SEU_REPO/main/SpeedHUD_Delta_no_toggle.lua"))()
 
 -- ========== CONFIG ==========
 local REFRESH_INTERVAL = 0.6
@@ -42,10 +41,10 @@ end
 local GuiParent, parentSource = chooseGuiParent()
 print("[SpeedHUD] GUI parent:", parentSource)
 if protect_gui_f and GuiParent then pcall(function() protect_gui_f(GuiParent) end); print("[SpeedHUD] protect_gui aplicado") end
-if not GuiParent then warn("[SpeedHUD] Nenhum GuiParent disponível. Executor pode bloquear GUIs.") end
+if not GuiParent then warn("[SpeedHUD] Nenhum GuiParent disponível. Executor pode estar bloqueando GUIs.") end
 
 -- estado
-local enabled = false -- começa OFF
+local enabled = true -- começa ATIVADO
 local guiByPlayer = {}
 local vehicleData = {}
 
@@ -101,7 +100,7 @@ local function findAttributeKey(model)
 	return nil
 end
 
--- monitorVehicle (detecta child/attribute e conecta DescendantAdded / AttributeChanged)
+-- monitorVehicle: detecta child/attribute e conecta DescendantAdded / AttributeChanged
 local function monitorVehicle(vehicle)
 	if not vehicle or not vehicle.Parent then return end
 	if vehicleData[vehicle] then return vehicleData[vehicle] end
@@ -286,7 +285,7 @@ local function ensureRefsForPlayer(player, d, seat)
 	if d.vehicle then monitorVehicle(d.vehicle) end
 end
 
--- Refresh drivers (cria/destroi) - chamada periódica
+-- Refresh drivers (cria/destroi)
 local function refreshDrivers()
 	for _,pl in ipairs(Players:GetPlayers()) do
 		local ok, seat = pcall(isPlayerDriving, pl)
@@ -300,10 +299,10 @@ local function refreshDrivers()
 	for veh,vd in pairs(vehicleData) do if not veh.Parent then cleanupVehicle(veh) end end
 end
 
--- ATIVAÇÃO IMEDIATA: quando o usuário clica ON chamamos isso para debug
+-- activateImmediate: cria HUDs já ao executar
 local function activateImmediate()
-	print("[SpeedHUD] tentando ativar HUDs para todos os players...")
-	if not GuiParent then warn("[SpeedHUD] GuiParent nil — HUDs não podem ser criados") end
+	print("[SpeedHUD] Ativando HUDs: varredura imediata...")
+	if not GuiParent then warn("[SpeedHUD] GuiParent nil — HUDs podem não ser criados") end
 	for _,pl in ipairs(Players:GetPlayers()) do
 		local ok, seat = pcall(isPlayerDriving, pl)
 		if ok and seat then
@@ -316,8 +315,7 @@ local function activateImmediate()
 				print(("[SpeedHUD] Não foi possível criar HUD para %s (reason: %s)"):format(pl.Name, tostring(reason)))
 			end
 		else
-			print(("[SpeedHUD] %s não está dirigindo (ou erro: %s)"):format(pl.Name, tostring(seat)))
-			-- removemos caso exista por segurança
+			print(("[SpeedHUD] %s não está dirigindo ou erro: %s"):format(pl.Name, tostring(seat)))
 			if guiByPlayer[pl] then removeBillboardForPlayer(pl) end
 		end
 	end
@@ -334,7 +332,7 @@ end)
 
 Players.PlayerRemoving:Connect(function(p) removeBillboardForPlayer(p) end)
 
--- Pequena notificação na tela
+-- notificação visual curta (opcional)
 local function showNotification(text, timeSec)
 	if not GuiParent then return end
 	local ok, sg = pcall(function()
@@ -360,125 +358,11 @@ local function showNotification(text, timeSec)
 	label.TextColor3 = Color3.fromRGB(255,255,255)
 	label.Text = text
 	label.Parent = frame
-	spawn(function()
-		wait(timeSec or 1.6)
-		pcall(function() sg:Destroy() end)
-	end)
+	spawn(function() wait(timeSec or 1.6); pcall(function() sg:Destroy() end) end)
 end
 
--- Toggle draggável (corrigido) - usa TextButton e chama activateImmediate() quando ligado
-local function createDraggableToggle()
-	if not GuiParent then warn("[SpeedHUD] toggle: GuiParent nil"); return end
-	local ok, sg = pcall(function()
-		local s = Instance.new("ScreenGui")
-		s.Name = "SpeedHUD_ToggleGui_v4"
-		s.ResetOnSpawn = false
-		s.Parent = GuiParent
-		return s
-	end)
-	if not ok or not sg then warn("[SpeedHUD] Falha criar ScreenGui do toggle:", sg); return end
-
-	local btn = Instance.new("TextButton")
-	btn.Name = "SpeedToggle"
-	btn.Size = UDim2.new(0, 64, 0, 64)
-	btn.Position = UDim2.new(0.02, 0, 0.02, 0)
-	btn.AnchorPoint = Vector2.new(0,0)
-	btn.BackgroundColor3 = Color3.fromRGB(25,25,25)
-	btn.BackgroundTransparency = 0.2
-	btn.BorderSizePixel = 0
-	btn.Font = Enum.Font.SourceSansBold
-	btn.TextSize = 20
-	btn.TextColor3 = Color3.fromRGB(255,255,255)
-	btn.Text = "OFF"
-	btn.Parent = sg
-	btn.Active = true
-
-	local dragging = false
-	local dragInput = nil
-	local dragStart = nil
-	local startPos = nil
-	local moved = false
-	local touchStartTime = 0
-
-	local function updatePosition(input)
-		local delta = input.Position - dragStart
-		btn.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-		moved = true
-	end
-
-	btn.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			dragging = true
-			dragStart = input.Position
-			startPos = btn.Position
-			dragInput = input
-			moved = false
-			touchStartTime = tick()
-		end
-	end)
-
-	btn.InputChanged:Connect(function(input)
-		if input == dragInput then updatePosition(input) end
-	end)
-
-	UserInputService.InputChanged:Connect(function(input)
-		if dragging and input == dragInput then updatePosition(input) end
-	end)
-
-	btn.InputEnded:Connect(function(input)
-		if input == dragInput then
-			dragging = false
-			dragInput = nil
-			local duration = tick() - touchStartTime
-			local wasTap = (not moved) and (duration < 0.35)
-			if not wasTap and moved then
-				local delta = (input.Position - dragStart).Magnitude
-				if delta < 8 and duration < 0.35 then wasTap = true end
-			end
-
-			if wasTap then
-				enabled = not enabled
-				btn.Text = enabled and "ON" or "OFF"
-				if enabled then
-					showNotification("SpeedHUD: ON", 1.4)
-					print("[SpeedHUD] ativado via toggle")
-					pcall(refreshDrivers)
-					activateImmediate()
-				else
-					showNotification("SpeedHUD: OFF", 1.2)
-					print("[SpeedHUD] desativado via toggle")
-					for _,d in pairs(guiByPlayer) do if d and d.billboard then d.billboard.Enabled = false end end
-				end
-			end
-
-			-- clamp
-			local screenX = GuiParent.AbsoluteSize and GuiParent.AbsoluteSize.X or 1920
-			local screenY = GuiParent.AbsoluteSize and GuiParent.AbsoluteSize.Y or 1080
-			local x = math.clamp(btn.Position.X.Offset, 0, math.max(0, screenX - btn.AbsoluteSize.X))
-			local y = math.clamp(btn.Position.Y.Offset, 0, math.max(0, screenY - btn.AbsoluteSize.Y))
-			btn.Position = UDim2.new(0, x, 0, y)
-		end
-	end)
-
-	btn.Activated:Connect(function()
-		-- Activated pode disparar em alguns casos; evita duplo toggle durante drag
-		if dragging then return end
-		enabled = not enabled
-		btn.Text = enabled and "ON" or "OFF"
-		if enabled then
-			showNotification("SpeedHUD: ON", 1.4)
-			print("[SpeedHUD] ativado via Activated")
-			pcall(refreshDrivers)
-			activateImmediate()
-		else
-			showNotification("SpeedHUD: OFF", 1.2)
-			print("[SpeedHUD] desativado via Activated")
-			for _,d in pairs(guiByPlayer) do if d and d.billboard then d.billboard.Enabled = false end end
-		end
-	end)
-end
-
--- init
-createDraggableToggle()
+-- inicialização imediata
 pcall(refreshDrivers)
-print("[SpeedHUD] carregado (inicialmente OFF). Clique no botão para ligar.")
+activateImmediate()
+showNotification("SpeedHUD: ON", 1.6)
+print("[SpeedHUD] iniciado e ATIVADO (HUDs devem aparecer para motoristas).")
