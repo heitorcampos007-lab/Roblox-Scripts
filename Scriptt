@@ -1,0 +1,89 @@
+--[[
+Script básico de teste para Brookhaven
+Botão On/Off que ativa o velocímetro
+]]
+
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local mouse = player:GetMouse()
+
+-- Criar interface básica
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Parent = player:WaitForChild("PlayerGui")
+
+-- Velocímetro
+local VelText = Instance.new("TextLabel")
+VelText.Size = UDim2.new(0, 200, 0, 50)
+VelText.Position = UDim2.new(0.5, -100, 0.1, 0)
+VelText.BackgroundTransparency = 1
+VelText.TextScaled = true
+VelText.Visible = false
+VelText.Font = Enum.Font.SourceSansBold
+VelText.Parent = ScreenGui
+
+-- Botão
+local Button = Instance.new("TextButton")
+Button.Size = UDim2.new(0, 100, 0, 50)
+Button.Position = UDim2.new(0, 50, 0, 50)
+Button.Text = "OFF"
+Button.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+Button.Parent = ScreenGui
+Button.Active = true
+Button.Draggable = true
+
+local active = false
+
+-- Função pra pegar velocidade (versão melhorada)
+local function getCarSpeedValue(character)
+    if not character then return 0 end
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return 0 end
+    local seat = humanoid.SeatPart
+    if not seat or not seat:IsA("VehicleSeat") then return 0 end
+    local carModel = seat:FindFirstAncestorOfClass("Model")
+    if not carModel then return 0 end
+    for _, obj in ipairs(carModel:GetDescendants()) do
+        if obj:IsA("NumberValue") then
+            local name = obj.Name:lower()
+            if name:find("speed") or name:find("velocity") then
+                return obj.Value
+            end
+        end
+    end
+    return 0
+end
+
+-- Atualizar velocímetro
+local function updateVel()
+    if not active then return end
+    local speed = getCarSpeedValue(character)
+    local nick = player.Name
+    local velColor = Color3.fromRGB(0, 255, 0)
+    local warning = ""
+    if speed >= 100 then
+        velColor = Color3.fromRGB(255, 0, 0)
+        warning = " ⚠️"
+    end
+    VelText.Text = nick .. "\n" .. "<RGB>Vel: </RGB>" .. tostring(math.floor(speed)) .. warning
+    VelText.TextColor3 = velColor
+end
+
+-- Botão On/Off
+Button.MouseButton1Click:Connect(function()
+    active = not active
+    VelText.Visible = active
+    if active then
+        Button.Text = "ON"
+        Button.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+    else
+        Button.Text = "OFF"
+        Button.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+    end
+end)
+
+-- Loop de atualização
+while true do
+    updateVel()
+    wait(0.1)
+end
