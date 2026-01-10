@@ -1,10 +1,10 @@
--- LocalScript para Roblox (use em StarterPlayer -> StarterPlayerScripts)
--- Mostra uma BillboardGui para cada jogador com Nick e Vel: (velocidade)
--- Inclui botão ON/OFF (compatível com mobile)
--- Observações:
--- 1) Mede velocidade usando HumanoidRootPart.AssemblyLinearVelocity (ou Velocity).
--- 2) Pode haver imprecisões dependendo de como o veículo é replicado pelo servidor.
--- 3) Executar localmente: coloque este LocalScript em StarterPlayerScripts.
+-- LocalScript para Roblox (StarterPlayer -> StarterPlayerScripts)
+-- Versão adaptada para Brookhaven:
+-- - Mostra um BillboardGui apenas para jogadores que ESTÃO DIRIGINDO um VehicleSeat (não mostra passageiros).
+-- - Remove o "quadrado cinza": apenas nick + "Vel: X" são exibidos (labels transparentes).
+-- - Tenta ler a velocidade diretamente do veículo (NumberValue ou Attribute com "speed" no nome).
+-- - Se não encontrar um valor de velocidade no veículo, volta ao cálculo por AssemblyLinearVelocity.
+-- - Botão ON/OFF para mobile/desktop no canto superior direito.
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -13,112 +13,314 @@ local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
 local enabled = true
-local billboards = {} -- map player -> { gui, speedLabel, hrp }
+local billboards = {} -- map player -> { gui, speedLabel, nameLabel, seat, vehicle, speedSourceCache }
 
--- Cores
 local COLOR_GREEN = Color3.fromRGB(76, 175, 80)
 local COLOR_RED   = Color3.fromRGB(244, 67, 54)
 local COLOR_WHITE = Color3.fromRGB(255, 255, 255)
 
--- Cria/atualiza BillboardGui para um personagem
-local function createBillboardForCharacter(player, character)
-	if not player or not character then return end
-	local hrp = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Torso") -- fallback
-	if not hrp then return end
+-- Util: procura NumberValue cujo nome contenha "speed" (case-insensitive) no veículo (procura recursiva curta)
+local function findNumberValueSpeed(model)
+	if not model then return nil end
+	-- busca direta por nomes comuns rápido
+	local commonNames = {"Speed","MaxSpeed","VehicleSpeed","CarSpeed","TopSpeed","MaxVelocity","SpeedValue","DriveSpeed"}
+	for _,n in ipairs(commonNames) do
+		local nv = model:FindFirstChild(n, true)
+		if nv and nv:IsA("NumberValue") then
+			return nv
+		end
+	end
+	-- busca geral por NumberValue com "speed" no nome
+	for _,nv in ipairs(model:GetDescendants()) do
+		if nv:IsA("NumberValue") then
+			local lname = nv.Name:lower()
+			if string.find(lname, "speed") then
+				return nv
+			end
+		end
+	end
+	return nil
+end
+
+-- Util: procura atributo contendo "speed"
+local function findAttributeSpeed(model)
+	if not model or type(model.GetAttributes) ~= "function" then return nil end
+	local attrs = model:GetAttributes()
+	for k,v in pairs(attrs) do
+		if type(v) == "number" and string.find(k:lower(), "speed") then
+			return k
+		end
+	end
+	-- também verifica o próprio modelo pai (sub-objects não têm GetAttributes list typical)
+	return nil
+end
+
+-- Tenta obter o veículo associado ao seat (procura ancestor Model)
+local function getVehicleFromSeat(seat)
+	if not seat then return nil end
+	local ancestor = seat
+	while ancestor and ancestor ~= workspace do
+		if ancestor:IsA("Model") then
+			return ancestor
+		end
+		ancestor = ancestor.Parent
+	end
+	return nil
+end
+
+-- Cria BillboardGui transparente (só texto) para um jogador que está dirigindo
+local function createBillboardForDriver(player, seat)
+	if not player or not seat then return end
 
 	local guiName = "SpeedBillboard_" .. player.UserId
-	-- Remove antigo se existir
-	local old = PlayerGui:FindFirstChild(guiName)
-	if old then old:Destroy() end
+
+	-- se já existir, reaproveita mas atualiza adornee
+	if billboards[player] and billboards[player].gui then
+		local data = billboards[player]
+		data.gui.Adornee = seat
+		data.seat = seat
+		return data
+	end
 
 	local billboard = Instance.new("BillboardGui")
 	billboard.Name = guiName
-	billboard.Adornee = hrp
-	billboard.Size = UDim2.new(0, 160, 0, 48)
+	billboard.Adornee = seat
+	billboard.Size = UDim2.new(0, 160, 0, 44)
 	billboard.StudsOffset = Vector3.new(0, 2.6, 0)
 	billboard.AlwaysOnTop = true
 	billboard.MaxDistance = 200
 	billboard.Parent = PlayerGui
 
-	local frame = Instance.new("Frame")
-	frame.Size = UDim2.new(1, 0, 1, 0)
-	frame.BackgroundTransparency = 0.45
-	frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-	frame.BorderSizePixel = 0
-	frame.Parent = billboard
-
+	-- Nome (nick) - transparente
 	local nameLabel = Instance.new("TextLabel")
 	nameLabel.BackgroundTransparency = 1
-	nameLabel.Size = UDim2.new(1, -8, 0.5, -2)
-	nameLabel.Position = UDim2.new(0, 4, 0, 2)
+	nameLabel.Size = UDim2.new(1, 0, 0.5, 0)
+	nameLabel.Position = UDim2.new(0, 0, 0, 0)
 	nameLabel.Font = Enum.Font.SourceSansBold
 	nameLabel.TextSize = 18
 	nameLabel.TextScaled = true
 	nameLabel.TextColor3 = COLOR_WHITE
-	nameLabel.Text = player.Name -- "nick" do jogador
-	nameLabel.Parent = frame
+	nameLabel.TextStrokeTransparency = 0.7
+	nameLabel.Text = player.Name
+	nameLabel.Parent = billboard
 
+	-- Velocidade - transparente
 	local speedLabel = Instance.new("TextLabel")
 	speedLabel.BackgroundTransparency = 1
-	speedLabel.Size = UDim2.new(1, -8, 0.5, -2)
-	speedLabel.Position = UDim2.new(0, 4, 0.5, 0)
+	speedLabel.Size = UDim2.new(1, 0, 0.5, 0)
+	speedLabel.Position = UDim2.new(0, 0, 0.5, 0)
 	speedLabel.Font = Enum.Font.SourceSans
 	speedLabel.TextSize = 18
 	speedLabel.TextScaled = true
 	speedLabel.TextColor3 = COLOR_WHITE
+	speedLabel.TextStrokeTransparency = 0.7
 	speedLabel.Text = "Vel: 0"
-	speedLabel.Parent = frame
+	speedLabel.Parent = billboard
 
-	billboards[player] = {
+	local data = {
 		gui = billboard;
+		nameLabel = nameLabel;
 		speedLabel = speedLabel;
-		hrp = hrp;
+		seat = seat;
+		vehicle = getVehicleFromSeat(seat);
+		speedSourceCache = nil; -- poderá conter {type="NumberValue", obj=nv} ou {type="Attribute", key=attrName}
 	}
+	billboards[player] = data
+	return data
 end
 
--- Configura eventos para um jogador (para criar billboard ao spawnar)
-local function setupPlayer(player)
-	-- Quando personagem aparecer
-	local function onCharacterAdded(character)
-		-- Aguarda Hrp existir (timeout leve)
-		local hrp = character:WaitForChild("HumanoidRootPart", 5)
-		if not hrp then
-			-- tenta criar mesmo se não tiver
-			createBillboardForCharacter(player, character)
-			return
-		end
-		createBillboardForCharacter(player, character)
-	end
-
-	-- Se já tiver personagem ativo, cria na hora
-	if player.Character then
-		onCharacterAdded(player.Character)
-	end
-	player.CharacterAdded:Connect(onCharacterAdded)
-
-	-- Se personagem removido, limpa GUI local
-	player.CharacterRemoving:Connect(function(char)
-		local data = billboards[player]
-		if data and data.gui then
+-- Remove e limpa billboard de um jogador
+local function removeBillboard(player)
+	local data = billboards[player]
+	if data then
+		if data.gui and data.gui.Parent then
 			data.gui:Destroy()
 		end
 		billboards[player] = nil
-	end)
+	end
 end
 
--- Inicializa para todos jogadores atuais e futuros
-for _, p in ipairs(Players:GetPlayers()) do
-	setupPlayer(p)
-end
-Players.PlayerAdded:Connect(setupPlayer)
-Players.PlayerRemoving:Connect(function(p)
-	if billboards[p] and billboards[p].gui then
-		billboards[p].gui:Destroy()
+-- Obtém o valor de velocidade "definido no veículo" (retorna número ou nil)
+-- Primeiro tenta NumberValue no vehicle, depois Attribute no vehicle/seat, depois nil
+local function getVehicleDefinedSpeed(data)
+	if not data then return nil end
+	local vehicle = data.vehicle
+	local seat = data.seat
+
+	-- se já temos cache válida, usa-a
+	if data.speedSourceCache then
+		local c = data.speedSourceCache
+		if c.type == "NumberValue" and c.obj and c.obj.Parent then
+			return c.obj.Value
+		elseif c.type == "Attribute" and vehicle and vehicle:GetAttribute(c.key) then
+			return vehicle:GetAttribute(c.key)
+		end
+		-- cache inválido -> limpar e refazer busca
+		data.speedSourceCache = nil
 	end
-	billboards[p] = nil
+
+	-- busca NumberValue dentro do veículo
+	if vehicle then
+		local nv = findNumberValueSpeed(vehicle)
+		if nv then
+			data.speedSourceCache = { type = "NumberValue", obj = nv }
+			return nv.Value
+		end
+
+		-- busca atributo em vehicle ou seat
+		-- verifica atributos do model e do seat
+		local attrs = vehicle:GetAttributes and vehicle:GetAttributes() or {}
+		for k,v in pairs(attrs) do
+			if type(v) == "number" and string.find(k:lower(), "speed") then
+				data.speedSourceCache = { type = "Attribute", key = k }
+				return v
+			end
+		end
+		if seat and seat.GetAttributes then
+			local sattrs = seat:GetAttributes()
+			for k,v in pairs(sattrs) do
+				if type(v) == "number" and string.find(k:lower(), "speed") then
+					data.speedSourceCache = { type = "Attribute", key = k, seatBased = true }
+					return v
+				end
+			end
+		end
+	end
+
+	-- se não encontrou, tenta buscar NumberValue mais acima no seat
+	if seat then
+		for _,child in ipairs(seat:GetChildren()) do
+			if child:IsA("NumberValue") and string.find(child.Name:lower(), "speed") then
+				data.speedSourceCache = { type = "NumberValue", obj = child }
+				return child.Value
+			end
+		end
+	end
+
+	return nil
+end
+
+-- Determina se um jogador está dirigindo (sentado em VehicleSeat e ocupante é humano do character)
+local function isPlayerDriving(player)
+	if not player or not player.Character then return false end
+	local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then return false end
+	local seat = humanoid.SeatPart
+	if not seat then return false end
+	if not seat:IsA("VehicleSeat") then return false end
+	-- occupant check: VehicleSeat.Occupant is the Humanoid currently in the seat
+	if seat.Occupant ~= humanoid then return false end
+	-- consider driving
+	return true, seat
+end
+
+-- Atualiza a lista de billboards conforme estados de dirigir
+local function refreshBillboardsForAllPlayers()
+	for _,player in ipairs(Players:GetPlayers()) do
+		local driving, seat = isPlayerDriving(player)
+		local data = billboards[player]
+		if driving then
+			-- cria se não existir
+			if not data then
+				createBillboardForDriver(player, seat)
+				data = billboards[player]
+			else
+				-- atualiza seat/vehicle se mudou
+				if data.seat ~= seat then
+					data.seat = seat
+					data.vehicle = getVehicleFromSeat(seat)
+					if data.gui then
+						data.gui.Adornee = seat
+					end
+					data.speedSourceCache = nil
+				end
+			end
+		else
+			-- se não estiver dirigindo, remove billboard se existir
+			if data then
+				removeBillboard(player)
+			end
+		end
+	end
+end
+
+-- Atualiza texto de velocidade em cada billboard
+local function updateSpeeds()
+	for player, data in pairs(billboards) do
+		if not player or not player.PlayerGui or not data.gui then
+			removeBillboard(player)
+		else
+			-- tenta obter velocidade definida no veículo
+			local vehicleSpeed = getVehicleDefinedSpeed(data)
+			local displayedSpeed = nil
+
+			if vehicleSpeed and type(vehicleSpeed) == "number" then
+				displayedSpeed = math.floor(vehicleSpeed + 0.5)
+			else
+				-- fallback: usa velocidade do HumanoidRootPart / seat velocity
+				local speedVal = 0
+				-- tenta usar seat.Velocity se disponível (part)
+				if data.seat and data.seat:IsA("BasePart") then
+					local vel = data.seat.AssemblyLinearVelocity or data.seat.Velocity or Vector3.new()
+					speedVal = vel.Magnitude
+				else
+					-- tenta HRP do personagem do jogador
+					if player.Character then
+						local hrp = player.Character:FindFirstChild("HumanoidRootPart") or player.Character:FindFirstChild("Torso")
+						if hrp then
+							local vel = hrp.AssemblyLinearVelocity or hrp.Velocity or Vector3.new()
+							speedVal = vel.Magnitude
+						end
+					end
+				end
+				displayedSpeed = math.floor(speedVal + 0.5)
+			end
+
+			-- Atualiza label e cor conforme regra
+			if displayedSpeed >= 1 and displayedSpeed <= 100 then
+				data.speedLabel.TextColor3 = COLOR_GREEN
+				data.speedLabel.Text = "Vel: " .. tostring(displayedSpeed)
+			elseif displayedSpeed >= 101 then
+				data.speedLabel.TextColor3 = COLOR_RED
+				data.speedLabel.Text = "Vel: " .. tostring(displayedSpeed) .. " ⚠️"
+			else
+				data.speedLabel.TextColor3 = COLOR_WHITE
+				data.speedLabel.Text = "Vel: 0"
+			end
+		end
+	end
+end
+
+-- Inicializa: checa periodicamente/por frame quem está dirigindo
+-- Usamos RenderStepped para atualização suave da velocidade, mas também chamamos um refresh leve a cada X segundos caso algo mude
+local refreshTimer = 0
+local REFRESH_INTERVAL = 1.0 -- segundos, para detectar novos drivers mais robusto
+
+RunService.RenderStepped:Connect(function(dt)
+	if not enabled then return end
+	refreshTimer = refreshTimer + dt
+	-- atualiza billboards (criação/remoção) a cada REFRESH_INTERVAL segundos
+	if refreshTimer >= REFRESH_INTERVAL then
+		refreshTimer = 0
+		refreshBillboardsForAllPlayers()
+	end
+	-- atualiza velocidade a cada frame (ou quando gui existe)
+	updateSpeeds()
 end)
 
--- Botão ON/OFF (ScreenGui)
+-- Setup inicial: cria objetos para jogadores já presentes (não cria billboards ainda — será criado somente se estiverem dirigindo)
+Players.PlayerAdded:Connect(function(p)
+	-- opcional: esperar character se precisar (não obrigatório aqui)
+	p.CharacterAdded:Connect(function()
+		-- quando o player spawna, tentar detectar se já está dirigindo
+		-- (a rotina de refresh cuidará disso)
+	end)
+end)
+Players.PlayerRemoving:Connect(function(p)
+	removeBillboard(p)
+end)
+
+-- Botão ON/OFF (ScreenGui) - compatível com mobile
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "SpeedToggleGUI"
 screenGui.ResetOnSpawn = false
@@ -127,8 +329,9 @@ screenGui.Parent = PlayerGui
 local toggleButton = Instance.new("TextButton")
 toggleButton.Name = "ToggleButton"
 toggleButton.Size = UDim2.new(0, 140, 0, 44)
-toggleButton.Position = UDim2.new(1, -154, 0, 10) -- canto superior direito com margin
+toggleButton.Position = UDim2.new(1, -154, 0, 10)
 toggleButton.AnchorPoint = Vector2.new(0, 0)
+toggleButton.BackgroundTransparency = 0.25
 toggleButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 toggleButton.BorderSizePixel = 0
 toggleButton.TextColor3 = Color3.fromRGB(255,255,255)
@@ -137,13 +340,17 @@ toggleButton.TextScaled = true
 toggleButton.Text = "Speed: ON"
 toggleButton.Parent = screenGui
 
--- Alterna estado e habilita/desabilita billboards
 local function setEnabled(state)
 	enabled = state
 	toggleButton.Text = state and "Speed: ON" or "Speed: OFF"
-	for _, data in pairs(billboards) do
-		if data.gui then
-			data.gui.Enabled = state
+	if not state then
+		-- se for desligar, esconder todas as GUIs criadas (mas mantê-las na tabela para reativar)
+		for _, data in pairs(billboards) do
+			if data.gui then data.gui.Enabled = false end
+		end
+	else
+		for _, data in pairs(billboards) do
+			if data.gui then data.gui.Enabled = true end
 		end
 	end
 end
@@ -152,46 +359,5 @@ toggleButton.MouseButton1Click:Connect(function()
 	setEnabled(not enabled)
 end)
 
--- Atualização de velocidade (RenderStepped para suavidade)
-RunService.RenderStepped:Connect(function()
-	if not enabled then return end
-
-	for player, data in pairs(billboards) do
-		-- Checa se caracter ainda válido
-		if not player or not player.Parent then
-			-- jogador saiu
-			if data.gui then data.gui:Destroy() end
-			billboards[player] = nil
-		else
-			local hrp = data.hrp
-			-- tenta recuperar hrp se necessário
-			if (not hrp or not hrp.Parent) and player.Character then
-				hrp = player.Character:FindFirstChild("HumanoidRootPart") or player.Character:FindFirstChild("Torso")
-				data.hrp = hrp
-				if data.gui and hrp then
-					data.gui.Adornee = hrp
-				end
-			end
-
-			local speed = 0
-			if hrp and hrp.Parent then
-				-- Usa AssemblyLinearVelocity (mais moderno); cai para Velocity se não existir
-				local vel = hrp.AssemblyLinearVelocity or hrp.Velocity or Vector3.new()
-				speed = math.floor(vel.Magnitude + 0.5)
-			end
-
-			-- Atualiza texto e cor conforme regra: 1-100 verde, 101+ vermelho + emoji
-			if speed >= 1 and speed <= 100 then
-				data.speedLabel.TextColor3 = COLOR_GREEN
-				data.speedLabel.Text = "Vel: " .. tostring(speed)
-			elseif speed >= 101 then
-				data.speedLabel.TextColor3 = COLOR_RED
-				data.speedLabel.Text = "Vel: " .. tostring(speed) .. " ⚠️"
-			else
-				-- parado ou 0
-				data.speedLabel.TextColor3 = COLOR_WHITE
-				data.speedLabel.Text = "Vel: 0"
-			end
-		end
-	end
-end)
+-- Primeira varredura inicial
+refreshBillboardsForAllPlayers()
