@@ -73,6 +73,7 @@ local function updatePlayerLabel(plr)
         textLabel.TextScaled = true
         textLabel.Font = Enum.Font.SourceSansBold
         textLabel.TextStrokeTransparency = 0
+        textLabel.TextStrokeColor3 = Color3.fromRGB(0,0,0)
         textLabel.Parent = label
 
         playerLabels[plr] = label
@@ -81,6 +82,7 @@ local function updatePlayerLabel(plr)
     local speed = getCarSpeedValue(plr.Character)
     local color = speed <= 100 and Color3.fromRGB(0,255,0) or Color3.fromRGB(255,0,0)
     local emoji = speed > 100 and " ⚠️" or ""
+
     -- Nick e "Vel:" em branco, só a velocidade visível
     label.TextLabel.Text = " \n " .. math.floor(speed) .. emoji
     label.TextLabel.TextColor3 = color
@@ -95,6 +97,7 @@ RunService.RenderStepped:Connect(function()
         return
     end
 
+    -- Atualiza TODOS os jogadores, inclusive você
     for _, plr in ipairs(Players:GetPlayers()) do
         updatePlayerLabel(plr)
         playerLabels[plr].Enabled = true
