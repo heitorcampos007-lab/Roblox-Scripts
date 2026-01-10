@@ -1,9 +1,12 @@
+-- Serviços
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local player = Players.LocalPlayer
 
-local enabled = true
+local enabled = false -- Começa desligado
 local labels = {}
 
+-- Função para pegar velocidade real
 local function getSpeed(plr)
     local char = plr.Character
     if not char then return 0 end
@@ -13,6 +16,7 @@ local function getSpeed(plr)
     return math.floor(Vector3.new(v.X, 0, v.Z).Magnitude)
 end
 
+-- Cria ou atualiza o Billboard
 local function createLabel(plr)
     local char = plr.Character
     if not char then return end
@@ -25,19 +29,22 @@ local function createLabel(plr)
     bb.Size = UDim2.new(0, 200, 0, 60)
     bb.StudsOffset = Vector3.new(0, 2.5, 0)
     bb.AlwaysOnTop = true
-    bb.Parent = head -- 🔴 AQUI ESTAVA O ERRO
+    bb.Parent = head
     labels[plr] = bb
 
+    -- Nick
     local nick = Instance.new("TextLabel")
     nick.Size = UDim2.new(1, 0, 0.5, 0)
     nick.BackgroundTransparency = 1
     nick.TextScaled = true
     nick.Font = Enum.Font.SourceSansBold
     nick.TextStrokeTransparency = 0
-    nick.TextColor3 = Color3.new(1,1,1)
+    nick.TextStrokeColor3 = Color3.fromRGB(0,0,0)
+    nick.TextColor3 = Color3.fromRGB(255,255,255)
     nick.Text = plr.Name
     nick.Parent = bb
 
+    -- Velocidade
     local vel = Instance.new("TextLabel")
     vel.Name = "Vel"
     vel.Position = UDim2.new(0, 0, 0.5, 0)
@@ -46,9 +53,32 @@ local function createLabel(plr)
     vel.TextScaled = true
     vel.Font = Enum.Font.SourceSansBold
     vel.TextStrokeTransparency = 0
+    vel.TextStrokeColor3 = Color3.fromRGB(0,0,0)
+    vel.TextColor3 = Color3.fromRGB(255,255,255) -- Vel sempre branco
     vel.Parent = bb
 end
 
+-- Atualiza todos os jogadores
+local function updateLabels()
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr.Character then
+            if not labels[plr] then
+                createLabel(plr)
+            end
+            local bb = labels[plr]
+            local velLabel = bb:FindFirstChild("Vel")
+            if velLabel then
+                local speed = getSpeed(plr)
+                local emoji = speed >= 101 and " ⚠️" or ""
+                velLabel.Text = "Vel: " .. speed .. emoji
+                -- Cor do número
+                velLabel.TextColor3 = speed >= 101 and Color3.fromRGB(255,0,0) or Color3.fromRGB(0,255,0)
+            end
+        end
+    end
+end
+
+-- Conecta novos jogadores
 Players.PlayerAdded:Connect(function(plr)
     plr.CharacterAdded:Connect(function()
         task.wait(1)
@@ -56,24 +86,32 @@ Players.PlayerAdded:Connect(function(plr)
     end)
 end)
 
-for _, plr in ipairs(Players:GetPlayers()) do
-    if plr.Character then
-        createLabel(plr)
+-- GUI do botão On/Off
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = player:WaitForChild("PlayerGui")
+screenGui.Name = "SpeedMonitorButton"
+
+local toggleButton = Instance.new("TextButton")
+toggleButton.Size = UDim2.new(0,150,0,50)
+toggleButton.Position = UDim2.new(0,20,0,20)
+toggleButton.BackgroundColor3 = Color3.fromRGB(0,170,255)
+toggleButton.TextColor3 = Color3.fromRGB(1,1,1)
+toggleButton.Font = Enum.Font.SourceSansBold
+toggleButton.TextScaled = true
+toggleButton.Text = "Ativar Velocidade"
+toggleButton.Parent = screenGui
+
+toggleButton.MouseButton1Click:Connect(function()
+    enabled = not enabled
+    toggleButton.Text = enabled and "Desativar Velocidade" or "Ativar Velocidade"
+    for _, bb in pairs(labels) do
+        bb.Enabled = enabled
     end
-end
+end)
 
+-- Atualização contínua
 RunService.RenderStepped:Connect(function()
-    if not enabled then return end
-
-    for plr, bb in pairs(labels) do
-        local velLabel = bb:FindFirstChild("Vel")
-        if velLabel then
-            local speed = getSpeed(plr)
-            local warn = speed >= 101 and " ⚠️" or ""
-            velLabel.Text = "Vel: " .. speed .. warn
-            velLabel.TextColor3 = speed >= 101
-                and Color3.fromRGB(255,0,0)
-                or Color3.fromRGB(0,255,0)
-        end
+    if enabled then
+        updateLabels()
     end
 end)
