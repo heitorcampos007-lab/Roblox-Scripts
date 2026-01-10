@@ -1,5 +1,5 @@
 --[[
-🔥 Brookhaven Driver Speed Monitor – Corrigido
+🔥 Brookhaven Driver Speed Monitor – Definitivo
 Detecta a velocidade configurada do carro de cada motorista separadamente
 Botão ON/OFF arrastável
 Por Heitor
@@ -82,30 +82,32 @@ for _, player in ipairs(Players:GetPlayers()) do
 end
 Players.PlayerAdded:Connect(addPlayer)
 
--- Função para pegar a velocidade configurada do motorista
+-- Função para pegar velocidade configurada do motorista individual
 local function getDriverSpeed(character)
     if not character then return 0 end
     local humanoid = character:FindFirstChildWhichIsA("Humanoid")
     if not humanoid then return 0 end
+
     local seat = humanoid.SeatPart
     if not seat then return 0 end
 
-    -- Somente se o jogador estiver dirigindo
+    -- Só motoristas
     if seat:IsA("VehicleSeat") and seat.Occupant == humanoid then
         local carModel = seat:FindFirstAncestorWhichIsA("Model")
         if not carModel then return 0 end
 
-        -- Pega apenas o NumberValue do carro deste motorista específico
+        -- Procurar NumberValue chamado "speed" **somente dentro deste carro**
         for _, obj in ipairs(carModel:GetDescendants()) do
             if obj:IsA("NumberValue") and obj.Name:lower():find("speed") then
                 return obj.Value
             end
         end
     end
+
     return 0
 end
 
--- Atualização em tempo real
+-- Atualização contínua
 RunService.RenderStepped:Connect(function()
     for player, data in pairs(billboards) do
         local bb = data.billboard
