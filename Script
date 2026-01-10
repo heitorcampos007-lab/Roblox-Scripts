@@ -1,7 +1,8 @@
 -- =================================
 -- Script - Kart Brookhaven 🏁
 -- Velocímetro + Cronômetro
--- Painéis arrastáveis com X e -
+-- Dois botões deslizantes ON/OFF
+-- Painéis arrastáveis, X e -
 -- =================================
 
 local Players = game:GetService("Players")
@@ -78,7 +79,7 @@ gui.ResetOnSpawn = false
 
 -- ---------- PAINEL PRINCIPAL ----------
 local painel = Instance.new("Frame", gui)
-painel.Size = UDim2.fromOffset(300,180)
+painel.Size = UDim2.fromOffset(300,220)
 painel.Position = UDim2.fromScale(0.05,0.5)
 painel.BackgroundColor3 = Color3.fromRGB(0,0,0)
 painel.BorderSizePixel = 0
@@ -88,7 +89,7 @@ makeDraggable(painel)
 -- Título
 local titulo = Instance.new("TextLabel", painel)
 titulo.Text = "Script - Kart Brookhaven 🏁"
-titulo.Size = UDim2.fromOffset(200,30)
+titulo.Size = UDim2.fromOffset(250,30)
 titulo.Position = UDim2.fromOffset(10,40)
 titulo.BackgroundTransparency = 1
 titulo.TextColor3 = Color3.new(1,1,1)
@@ -116,81 +117,140 @@ btnMin.TextColor3 = Color3.new(1,1,1)
 btnMin.BackgroundColor3 = Color3.fromRGB(30,30,30)
 Instance.new("UICorner", btnMin).CornerRadius = UDim.new(1,0)
 
--- ---------- BOTÃO DESLIZANTE ON/OFF ----------
-local switchFrame = Instance.new("Frame", painel)
-switchFrame.Size = UDim2.fromOffset(60,30)
-switchFrame.Position = UDim2.fromScale(0.05,0.3)
-switchFrame.BackgroundColor3 = Color3.fromRGB(130,130,130)
-Instance.new("UICorner", switchFrame).CornerRadius = UDim.new(1,0)
+-- ---------- BOTÕES DESLIZANTES ----------
+local function createSwitch(parent, text, posY)
+	local frame = Instance.new("Frame", parent)
+	frame.Size = UDim2.fromOffset(60,30)
+	frame.Position = UDim2.fromScale(0.05,posY)
+	frame.BackgroundColor3 = Color3.fromRGB(130,130,130)
+	Instance.new("UICorner", frame).CornerRadius = UDim.new(1,0)
 
-local knob = Instance.new("Frame", switchFrame)
-knob.Size = UDim2.fromOffset(26,26)
-knob.Position = UDim2.fromOffset(2,2)
-knob.BackgroundColor3 = Color3.fromRGB(240,240,240)
-Instance.new("UICorner", knob).CornerRadius = UDim.new(1,0)
+	local knob = Instance.new("Frame", frame)
+	knob.Size = UDim2.fromOffset(26,26)
+	knob.Position = UDim2.fromOffset(2,2)
+	knob.BackgroundColor3 = Color3.fromRGB(240,240,240)
+	Instance.new("UICorner", knob).CornerRadius = UDim.new(1,0)
 
-local stateLabel = Instance.new("TextLabel", painel)
-stateLabel.Size = UDim2.fromOffset(50,30)
-stateLabel.Position = UDim2.fromScale(0.25,0.3)
-stateLabel.BackgroundTransparency = 1
-stateLabel.Font = Enum.Font.SourceSansBold
-stateLabel.TextSize = 16
-stateLabel.Text = "OFF"
-stateLabel.TextColor3 = Color3.fromRGB(0,255,0)
+	local label = Instance.new("TextLabel", parent)
+	label.Size = UDim2.fromOffset(80,30)
+	label.Position = UDim2.fromScale(0.25,posY)
+	label.BackgroundTransparency = 1
+	label.Font = Enum.Font.SourceSansBold
+	label.TextSize = 16
+	label.Text = "OFF"
+	label.TextColor3 = Color3.fromRGB(0,255,0)
 
--- Função atualizar switch
-local function updateSwitch()
-	if velEnabled then
-		switchFrame.BackgroundColor3 = Color3.fromRGB(0,200,0)
-		knob.Position = UDim2.fromOffset(2,2)
-		stateLabel.Text = "ON"
-		stateLabel.TextColor3 = Color3.fromRGB(0,255,0)
-	else
-		switchFrame.BackgroundColor3 = Color3.fromRGB(200,0,0)
-		knob.Position = UDim2.fromOffset(32,2)
-		stateLabel.Text = "OFF"
-		stateLabel.TextColor3 = Color3.fromRGB(0,255,0)
+	local state = false
+	local function update()
+		if state then
+			frame.BackgroundColor3 = Color3.fromRGB(0,200,0)
+			knob.Position = UDim2.fromOffset(2,2)
+			label.Text = "ON"
+			label.TextColor3 = Color3.fromRGB(0,255,0)
+		else
+			frame.BackgroundColor3 = Color3.fromRGB(200,0,0)
+			knob.Position = UDim2.fromOffset(32,2)
+			label.Text = "OFF"
+			label.TextColor3 = Color3.fromRGB(0,255,0)
+		end
 	end
+
+	frame.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			state = not state
+			update()
+			if text == "Velocímetro" then
+				velEnabled = state
+			else
+				chronoEnabled = state
+				if state then chronoPanel.Visible = true else chronoPanel.Visible = false end
+			end
+		end
+	end)
+	update()
+	return frame,label
 end
 
--- Conexão clique do botão deslizante
-switchFrame.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 then
-		velEnabled = not velEnabled
-		chronoEnabled = velEnabled
-		updateSwitch()
+local velSwitch, velLabel = createSwitch(painel,"Velocímetro",0.3)
+local chronoSwitch, chronoLabel = createSwitch(painel,"Cronômetro",0.5)
+
+-- ===============================
+-- PAINEL CRONÔMETRO
+-- ===============================
+local chronoPanel = Instance.new("Frame", gui)
+chronoPanel.Size = UDim2.fromOffset(250,120)
+chronoPanel.Position = UDim2.fromScale(0.3,0.5)
+chronoPanel.BackgroundColor3 = Color3.fromRGB(0,0,0)
+chronoPanel.BorderSizePixel = 0
+Instance.new("UICorner", chronoPanel).CornerRadius = UDim.new(0,12)
+chronoPanel.Visible = false
+makeDraggable(chronoPanel)
+
+local chronoTitle = Instance.new("TextLabel", chronoPanel)
+chronoTitle.Text = "Cronômetro"
+chronoTitle.Size = UDim2.fromOffset(150,25)
+chronoTitle.Position = UDim2.fromOffset(10,10)
+chronoTitle.BackgroundTransparency = 1
+chronoTitle.TextColor3 = Color3.new(1,1,1)
+chronoTitle.TextScaled = true
+
+-- Botões Resetar e Iniciar/Parar
+local btnReset = Instance.new("TextButton", chronoPanel)
+btnReset.Text = "Resetar"
+btnReset.Size = UDim2.fromOffset(80,30)
+btnReset.Position = UDim2.fromOffset(10,50)
+btnReset.BackgroundColor3 = Color3.fromRGB(150,150,150)
+Instance.new("UICorner", btnReset).CornerRadius = UDim.new(0,6)
+
+local btnStart = Instance.new("TextButton", chronoPanel)
+btnStart.Text = "Iniciar"
+btnStart.Size = UDim2.fromOffset(80,30)
+btnStart.Position = UDim2.fromOffset(150,50)
+btnStart.BackgroundColor3 = Color3.fromRGB(160,90,255)
+Instance.new("UICorner", btnStart).CornerRadius = UDim.new(0,6)
+
+-- Label do tempo
+local chronoLabelDisplay = Instance.new("TextLabel", chronoPanel)
+chronoLabelDisplay.Size = UDim2.fromOffset(230,30)
+chronoLabelDisplay.Position = UDim2.fromOffset(10,85)
+chronoLabelDisplay.BackgroundTransparency = 1
+chronoLabelDisplay.TextColor3 = Color3.fromRGB(255,255,255)
+chronoLabelDisplay.Font = Enum.Font.SourceSansBold
+chronoLabelDisplay.TextSize = 18
+chronoLabelDisplay.Text = "00m 00s 000ms"
+
+-- ===============================
+-- LOGICA DO CRONÔMETRO
+-- ===============================
+btnStart.MouseButton1Click:Connect(function()
+	if chronoRunning then
+		chronoRunning = false
+		btnStart.Text = "Iniciar"
+		btnStart.BackgroundColor3 = Color3.fromRGB(160,90,255)
+	else
+		chronoRunning = true
+		btnStart.Text = "Parar"
+		btnStart.BackgroundColor3 = Color3.fromRGB(255,0,0)
+	end
+end)
+
+btnReset.MouseButton1Click:Connect(function()
+	chronoTime = 0
+	chronoLabelDisplay.Text = "00m 00s 000ms"
+end)
+
+RunService.RenderStepped:Connect(function(dt)
+	if chronoRunning then
+		chronoTime += dt
+		local mins = math.floor(chronoTime/60)
+		local secs = math.floor(chronoTime%60)
+		local ms = math.floor((chronoTime - math.floor(chronoTime))*1000)
+		chronoLabelDisplay.Text = string.format("%02dm %02ds %03dms",mins,secs,ms)
 	end
 end)
 
 -- ===============================
--- BOTÕES DE MINIMIZAÇÃO
--- ===============================
-local miniCircle = Instance.new("TextButton", gui)
-miniCircle.Size = UDim2.fromOffset(50,50)
-miniCircle.Position = painel.Position
-miniCircle.Text = "🏁"
-miniCircle.Font = Enum.Font.SourceSansBold
-miniCircle.TextSize = 26
-miniCircle.TextColor3 = Color3.new(1,1,1)
-miniCircle.BackgroundColor3 = Color3.fromRGB(0,0,0)
-miniCircle.Visible = false
-Instance.new("UICorner", miniCircle).CornerRadius = UDim.new(1,0)
-makeDraggable(miniCircle)
-
-btnX.MouseButton1Click:Connect(function()
-	painel.Visible = false
-	miniCircle.Position = painel.Position
-	miniCircle.Visible = true
-end)
-
-miniCircle.MouseButton1Click:Connect(function()
-	painel.Position = miniCircle.Position
-	painel.Visible = true
-	miniCircle.Visible = false
-end)
-
--- ===============================
--- Velocímetro (BillboardGui acima de cada jogador)
+-- Velocímetro acima dos jogadores
 -- ===============================
 local function createMeter(player)
 	local character = player.Character
@@ -212,7 +272,6 @@ local function createMeter(player)
 	meters[player] = { gui = bb, label = txt }
 end
 
--- Criar para todos
 Players.PlayerAdded:Connect(function(p)
 	p.CharacterAdded:Connect(function()
 		if velEnabled then createMeter(p) end
@@ -223,9 +282,7 @@ for _,p in pairs(Players:GetPlayers()) do
 	if p.Character then createMeter(p) end
 end
 
--- ===============================
--- Atualizar Velocidade
--- ===============================
+-- Atualiza velocidade
 RunService.RenderStepped:Connect(function(dt)
 	if not velEnabled then
 		for _,d in pairs(meters) do
