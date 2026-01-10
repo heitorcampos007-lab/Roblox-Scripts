@@ -1,28 +1,27 @@
 --[[
-Teste de Velocímetro Brookhaven
-Nick e "Vel: " em branco
+Velocímetro Brookhaven - Todos os jogadores
+Nick branco, "Vel: " branco
 Número verde até 100, vermelho + ⚠️ a partir de 101
 Botão On/Off arrastável
 ]]
 
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
-local character = player.Character or player.CharacterAdded:Wait()
 
--- GUI
+-- GUI principal
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Parent = player:WaitForChild("PlayerGui")
 
--- Velocímetro
-local VelText = Instance.new("TextLabel")
-VelText.Size = UDim2.new(0, 250, 0, 60)
-VelText.Position = UDim2.new(0.5, -125, 0.1, 0)
-VelText.BackgroundTransparency = 1
-VelText.TextScaled = true
-VelText.Font = Enum.Font.SourceSansBold
-VelText.RichText = true
-VelText.Visible = false
-VelText.Parent = ScreenGui
+-- Frame para organizar os velocímetros
+local Frame = Instance.new("Frame")
+Frame.Size = UDim2.new(0, 250, 0, 300)
+Frame.Position = UDim2.new(0.7, 0, 0.1, 0)
+Frame.BackgroundTransparency = 0.5
+Frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+Frame.Parent = ScreenGui
+Frame.Active = true
+Frame.Draggable = true
 
 -- Botão On/Off
 local Button = Instance.new("TextButton")
@@ -36,7 +35,19 @@ Button.Draggable = true
 
 local active = false
 
--- Função pra pegar velocidade
+Button.MouseButton1Click:Connect(function()
+    active = not active
+    Frame.Visible = active
+    if active then
+        Button.Text = "ON"
+        Button.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+    else
+        Button.Text = "OFF"
+        Button.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+    end
+end)
+
+-- Função para pegar velocidade de um jogador
 local function getCarSpeedValue(character)
     if not character then return 0 end
     local humanoid = character:FindFirstChildOfClass("Humanoid")
@@ -56,40 +67,51 @@ local function getCarSpeedValue(character)
     return 0
 end
 
--- Atualizar velocímetro
-local function updateVel()
-    if not active then return end
-    local speed = getCarSpeedValue(character)
-    local nick = player.Name
-    local warning = ""
-    local numColor = Color3.fromRGB(0, 255, 0) -- verde padrão
+-- Criar labels para cada jogador
+local labels = {}
 
-    if speed >= 101 then
-        numColor = Color3.fromRGB(255, 0, 0) -- vermelho
-        warning = " ⚠️"
+local function updateLabels()
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= player then
+            if not labels[plr] then
+                local lbl = Instance.new("TextLabel")
+                lbl.Size = UDim2.new(1, 0, 0, 30)
+                lbl.BackgroundTransparency = 1
+                lbl.TextScaled = true
+                lbl.Font = Enum.Font.SourceSansBold
+                lbl.TextColor3 = Color3.fromRGB(0, 255, 0)
+                lbl.TextXAlignment = Enum.TextXAlignment.Left
+                lbl.Parent = Frame
+                labels[plr] = lbl
+            end
+        end
     end
-
-    VelText.Text = string.format(
-        '<font color="white">%s</font>\n<font color="white">Vel: </font><font color="#%02X%02X%02X">%d%s</font>',
-        nick, numColor.R*255, numColor.G*255, numColor.B*255, math.floor(speed), warning
-    )
 end
 
--- Botão On/Off
-Button.MouseButton1Click:Connect(function()
-    active = not active
-    VelText.Visible = active
+-- Atualizar velocímetro de cada jogador
+local function refreshVel()
+    local y = 0
+    for plr, lbl in pairs(labels) do
+        if plr.Character then
+            local speed = getCarSpeedValue(plr.Character)
+            local warning = ""
+            local numColor = Color3.fromRGB(0, 255, 0)
+            if speed >= 101 then
+                numColor = Color3.fromRGB(255, 0, 0)
+                warning = " ⚠️"
+            end
+            lbl.Position = UDim2.new(0, 0, 0, y)
+            lbl.Text = string.format("<font color='white'>%s</font>  Vel: <font color='#%02X%02X%02X'>%d%s</font>",
+                plr.Name, numColor.R*255, numColor.G*255, numColor.B*255, math.floor(speed), warning)
+            y = y + 30
+        end
+    end
+end
+
+-- Loop principal
+RunService.RenderStepped:Connect(function()
     if active then
-        Button.Text = "ON"
-        Button.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-    else
-        Button.Text = "OFF"
-        Button.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+        updateLabels()
+        refreshVel()
     end
 end)
-
--- Loop de atualização
-while true do
-    updateVel()
-    wait(0.1)
-end
