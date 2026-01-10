@@ -1,13 +1,14 @@
 --[[
-🔥 Brookhaven Vehicle Speed Display – Novo, funcional
+🔥 Brookhaven Vehicle Speed Display – Versão funcional
 Por Heitor
-Detecta a velocidade configurada do carro de todos os jogadores
+Mostra a velocidade real dos carros de todos os jogadores (incluindo você)
 Botão ON/OFF arrastável
 ]]
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
 
 -- Criar GUI principal
 local gui = Instance.new("ScreenGui")
@@ -80,11 +81,10 @@ end
 for _, player in ipairs(Players:GetPlayers()) do
     addPlayerBillboard(player)
 end
-
 Players.PlayerAdded:Connect(addPlayerBillboard)
 
--- Função para pegar o NumberValue de velocidade do carro
-local function getCarSpeedValue(character)
+-- Função para pegar velocidade real do carro
+local function getCarSpeed(character)
     if not character then return 0 end
     local humanoid = character:FindFirstChildWhichIsA("Humanoid")
     if not humanoid then return 0 end
@@ -93,12 +93,11 @@ local function getCarSpeedValue(character)
     local carModel = seat:FindFirstAncestorWhichIsA("Model")
     if not carModel then return 0 end
 
-    for _, obj in ipairs(carModel:GetDescendants()) do
-        if obj:IsA("NumberValue") and obj.Name:lower():find("speed") then
-            return obj.Value
-        end
-    end
-    return 0
+    local primary = carModel.PrimaryPart or carModel:FindFirstChild("HumanoidRootPart") or carModel:FindFirstChildWhichIsA("BasePart")
+    if not primary then return 0 end
+
+    -- Velocidade em magnitude
+    return math.floor(primary.Velocity.Magnitude)
 end
 
 -- Atualização contínua
@@ -110,7 +109,7 @@ RunService.RenderStepped:Connect(function()
             billboard.Enabled = true
             billboard.Adornee = player.Character:FindFirstChild("Head") or player.Character:FindFirstChild("HumanoidRootPart")
 
-            local speed = getCarSpeedValue(player.Character)
+            local speed = getCarSpeed(player.Character)
 
             -- Atualiza cores e texto
             if speed <= 100 then
