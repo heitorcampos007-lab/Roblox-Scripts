@@ -21,7 +21,7 @@ Panel.BackgroundColor3 = Color3.fromRGB(10,10,10)
 Panel.BorderSizePixel = 0
 Instance.new("UICorner", Panel).CornerRadius = UDim.new(0,12)
 
--- Drag do painel
+-- Drag painel
 do
 	local dragging, dragStart, startPos
 	Panel.InputBegan:Connect(function(input)
@@ -50,7 +50,7 @@ do
 	end)
 end
 
--- Título 🏁
+-- Título
 local Title = Instance.new("TextLabel", Panel)
 Title.Size = UDim2.new(1, -50, 0, 30)
 Title.Position = UDim2.new(0, 10, 0, 10)
@@ -61,7 +61,7 @@ Title.TextSize = 18
 Title.TextColor3 = Color3.fromRGB(255,255,255)
 Title.TextXAlignment = Enum.TextXAlignment.Left
 
--- Botão X (minimizar)
+-- Botão X
 local CloseBtn = Instance.new("TextButton", Panel)
 CloseBtn.Size = UDim2.new(0, 24, 0, 24)
 CloseBtn.Position = UDim2.new(1, -34, 0, 12)
@@ -73,7 +73,7 @@ CloseBtn.BackgroundColor3 = Color3.fromRGB(30,30,30)
 CloseBtn.BorderSizePixel = 0
 Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(1,0)
 
--- Caixa do velocímetro
+-- Caixa
 local Box = Instance.new("Frame", Panel)
 Box.Size = UDim2.new(1, -20, 0, 55)
 Box.Position = UDim2.new(0, 10, 0, 55)
@@ -127,22 +127,7 @@ local function updateSwitch()
 	end
 end
 
-Switch.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1
-	or input.UserInputType == Enum.UserInputType.Touch then
-		enabled = not enabled
-		updateSwitch()
-
-		if not enabled then
-			for _, d in pairs(meters) do
-				if d.gui then d.gui:Destroy() end
-			end
-			meters = {}
-		end
-	end
-end)
-
--- ================= MINIMIZADO (CÍRCULO 🏁) =================
+-- ================= MINIMIZADO =================
 local Mini = Instance.new("TextButton", ScreenGui)
 Mini.Size = UDim2.new(0, 50, 0, 50)
 Mini.Position = Panel.Position
@@ -154,35 +139,6 @@ Mini.BackgroundColor3 = Color3.fromRGB(10,10,10)
 Mini.BorderSizePixel = 0
 Mini.Visible = false
 Instance.new("UICorner", Mini).CornerRadius = UDim.new(1,0)
-
--- Drag do círculo
-do
-	local dragging, dragStart, startPos
-	Mini.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1
-		or input.UserInputType == Enum.UserInputType.Touch then
-			dragging = true
-			dragStart = input.Position
-			startPos = Mini.Position
-		end
-	end)
-	UserInputService.InputChanged:Connect(function(input)
-		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
-		or input.UserInputType == Enum.UserInputType.Touch) then
-			local delta = input.Position - dragStart
-			Mini.Position = UDim2.new(
-				startPos.X.Scale, startPos.X.Offset + delta.X,
-				startPos.Y.Scale, startPos.Y.Offset + delta.Y
-			)
-		end
-	end)
-	UserInputService.InputEnded:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1
-		or input.UserInputType == Enum.UserInputType.Touch then
-			dragging = false
-		end
-	end)
-end
 
 CloseBtn.MouseButton1Click:Connect(function()
 	Mini.Position = Panel.Position
@@ -217,13 +173,36 @@ local function createMeter(character, player)
 	meters[player] = { gui = bb, label = txt, lastPos = hrp.Position }
 end
 
-for _, p in pairs(Players:GetPlayers()) do
-	p.CharacterAdded:Connect(function(char)
-		task.wait(1)
-		if enabled then createMeter(char, p) end
-	end)
-	if p.Character and enabled then createMeter(p.Character, p) end
-end
+-- Switch lógica CORRIGIDA
+Switch.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1
+	or input.UserInputType == Enum.UserInputType.Touch then
+
+		enabled = not enabled
+		updateSwitch()
+
+		-- limpa tudo
+		for _, d in pairs(meters) do
+			if d.gui then d.gui:Destroy() end
+		end
+		meters = {}
+
+		-- cria pra TODOS (inclusive você)
+		if enabled then
+			for _, p in pairs(Players:GetPlayers()) do
+				if p.Character then
+					createMeter(p.Character, p)
+				end
+				p.CharacterAdded:Connect(function(char)
+					task.wait(1)
+					if enabled then
+						createMeter(char, p)
+					end
+				end)
+			end
+		end
+	end
+end)
 
 RunService.RenderStepped:Connect(function(dt)
 	if not enabled then return end
