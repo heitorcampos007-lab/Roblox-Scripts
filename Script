@@ -1,205 +1,628 @@
--- Script para LocalScript em StarterGui ou StarterPlayerScripts
+local P=game:GetService("Players")
+local R=game:GetService("RunService")
+local U=game:GetService("UserInputService")
+local L=P.LocalPlayer 
+local e=false 
+local d={}
+local m=0 
 
-local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
-local player = Players.LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui")
-
--- Criar ScreenGui principal
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "SpeedMonitorSystem"
-screenGui.ResetOnSpawn = false
-screenGui.Parent = playerGui
-
--- Criar botão ON/OFF
-local toggleButton = Instance.new("TextButton")
-toggleButton.Size = UDim2.new(0, 120, 0, 50)
-toggleButton.Position = UDim2.new(0.5, -60, 0.1, 0)
-toggleButton.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
-toggleButton.Text = "OFF"
-toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-toggleButton.Font = Enum.Font.GothamBold
-toggleButton.TextSize = 20
-toggleButton.Parent = screenGui
-
-local corner = Instance.new("UICorner")
-corner.CornerRadius = UDim.new(0, 10)
-corner.Parent = toggleButton
-
--- Estado do sistema
-local isActive = false
-local billboardGuis = {}
-
--- Função de arrastar o botão
-local dragging = false
-local dragInput, dragStart, startPos
-
-local function update(input)
-    local delta = input.Position - dragStart
-    toggleButton.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+local function g(c)
+    local h=c:FindFirstChildWhichIsA("Humanoid")
+    if not h then return end 
+    local s=h.SeatPart 
+    if not s then return end 
+    local M=s:FindFirstAncestorWhichIsA("Model")
+    if not M then return end 
+    for _,o in ipairs(M:GetDescendants())do 
+        if o:IsA("NumberValue")and o.Name:lower():find("speed")then 
+            return o 
+        end 
+    end 
 end
 
-toggleButton.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = true
-        dragStart = input.Position
-        startPos = toggleButton.Position
-        
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                dragging = false
+local G=Instance.new("ScreenGui")
+G.ResetOnSpawn=false 
+G.Name="Velocidade_SG"
+
+local function p(g)
+    local ok=false 
+    pcall(function()
+        if syn and syn.protect_gui then 
+            syn.protect_gui(g)
+            g.Parent=L:FindFirstChild("PlayerGui")or gethui()
+            ok=true 
+        end 
+    end)
+    if ok then 
+        if not g.Parent then 
+            g.Parent=L:WaitForChild("PlayerGui")
+        end 
+        return 
+    end 
+    pcall(function()
+        if gethui then 
+            g.Parent=gethui()
+            ok=true 
+        end 
+    end)
+    if ok then return end 
+    g.Parent=L:WaitForChild("PlayerGui")
+end
+
+p(G)
+
+local F=Instance.new("Frame",G)
+F.Size=UDim2.new(0,200,0,230)
+F.Position=UDim2.new(.05,0,.7,0)
+F.BackgroundColor3=Color3.fromRGB(30,30,30)
+F.BorderSizePixel=0 
+Instance.new("UICorner",F).CornerRadius=UDim.new(0,12)
+
+local drag=false 
+local di,ds,sp 
+
+local function u(i)
+    local d=i.Position-ds 
+    F.Position=UDim2.new(
+        sp.X.Scale,
+        sp.X.Offset+d.X,
+        sp.Y.Scale,
+        sp.Y.Offset+d.Y
+    )
+end
+
+F.InputBegan:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseButton1 then 
+        drag=true 
+        ds=i.Position 
+        sp=F.Position 
+        i.Changed:Connect(function()
+            if i.UserInputState==Enum.UserInputState.End then 
+                drag=false 
+            end 
+        end)
+    end 
+end)
+
+F.InputChanged:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseMovement then 
+        di=i 
+    end 
+end)
+
+R.RenderStepped:Connect(function()
+    if drag and di then 
+        u(di)
+    end 
+end)
+
+local T=Instance.new("TextLabel",F)
+T.Size=UDim2.new(1,0,0,25)
+T.BackgroundTransparency=1 
+T.Text="Painel - Kart Brookhaven 🏁" 
+T.Font=Enum.Font.GothamBold 
+T.TextSize=14 
+T.TextColor3=Color3.new(1,1,1)
+
+local B=Instance.new("TextButton",F)
+B.Size=UDim2.new(.9,0,0,30)
+B.Position=UDim2.new(.05,0,.14,0)
+B.BackgroundColor3=Color3.fromRGB(50,120,250)
+B.TextColor3=Color3.new(1,1,1)
+B.Text="Ativar"
+B.Font=Enum.Font.GothamBold 
+B.TextSize=14 
+Instance.new("UICorner",B).CornerRadius=UDim.new(0,6)
+
+local S=Instance.new("TextBox",F)
+S.Size=UDim2.new(.9,0,0,28)
+S.Position=UDim2.new(.05,0,.32,0)
+S.BackgroundColor3=Color3.fromRGB(60,60,60)
+S.TextColor3=Color3.new(1,1,1)
+S.PlaceholderText="Velocidade Máx"
+S.Font=Enum.Font.Gotham 
+S.TextSize=14 
+Instance.new("UICorner",S).CornerRadius=UDim.new(0,6)
+
+-- CRONÔMETRO SEÇÃO
+local CronoLabel=Instance.new("TextLabel",F)
+CronoLabel.Size=UDim2.new(.4,0,0,20)
+CronoLabel.Position=UDim2.new(.05,0,.52,0)
+CronoLabel.BackgroundTransparency=1
+CronoLabel.Text="Cronômetro"
+CronoLabel.Font=Enum.Font.GothamBold
+CronoLabel.TextSize=13
+CronoLabel.TextColor3=Color3.new(1,1,1)
+CronoLabel.TextXAlignment=Enum.TextXAlignment.Left
+
+local ToggleBG=Instance.new("Frame",F)
+ToggleBG.Size=UDim2.new(0,45,0,22)
+ToggleBG.Position=UDim2.new(.5,0,.52,0)
+ToggleBG.BackgroundColor3=Color3.fromRGB(255,50,50)
+Instance.new("UICorner",ToggleBG).CornerRadius=UDim.new(1,0)
+
+local ToggleBall=Instance.new("Frame",ToggleBG)
+ToggleBall.Size=UDim2.new(0,18,0,18)
+ToggleBall.Position=UDim2.new(0,2,0,2)
+ToggleBall.BackgroundColor3=Color3.new(1,1,1)
+Instance.new("UICorner",ToggleBall).CornerRadius=UDim.new(1,0)
+
+local ToggleBtn=Instance.new("TextButton",ToggleBG)
+ToggleBtn.Size=UDim2.new(1,0,1,0)
+ToggleBtn.BackgroundTransparency=1
+ToggleBtn.Text=""
+
+local ToggleStatus=Instance.new("TextLabel",F)
+ToggleStatus.Size=UDim2.new(.25,0,0,20)
+ToggleStatus.Position=UDim2.new(.72,0,.52,0)
+ToggleStatus.BackgroundTransparency=1
+ToggleStatus.Text="OFF"
+ToggleStatus.Font=Enum.Font.GothamBold
+ToggleStatus.TextSize=12
+ToggleStatus.TextColor3=Color3.fromRGB(255,50,50)
+ToggleStatus.TextXAlignment=Enum.TextXAlignment.Left
+
+local cronoActive=false
+
+ToggleBtn.MouseButton1Click:Connect(function()
+    cronoActive=not cronoActive
+    if cronoActive then
+        ToggleBG.BackgroundColor3=Color3.fromRGB(50,255,50)
+        ToggleBall:TweenPosition(UDim2.new(1,-20,0,2),Enum.EasingDirection.Out,Enum.EasingStyle.Quad,.2,true)
+        ToggleStatus.Text="ON"
+        ToggleStatus.TextColor3=Color3.fromRGB(50,255,50)
+    else
+        ToggleBG.BackgroundColor3=Color3.fromRGB(255,50,50)
+        ToggleBall:TweenPosition(UDim2.new(0,2,0,2),Enum.EasingDirection.Out,Enum.EasingStyle.Quad,.2,true)
+        ToggleStatus.Text="OFF"
+        ToggleStatus.TextColor3=Color3.fromRGB(255,50,50)
+    end
+end)
+
+-- QUALY AUTOMÁTICA SEÇÃO
+local QualyLabel=Instance.new("TextLabel",F)
+QualyLabel.Size=UDim2.new(.4,0,0,20)
+QualyLabel.Position=UDim2.new(.05,0,.68,0)
+QualyLabel.BackgroundTransparency=1
+QualyLabel.Text="Qualy Automática"
+QualyLabel.Font=Enum.Font.GothamBold
+QualyLabel.TextSize=13
+QualyLabel.TextColor3=Color3.new(1,1,1)
+QualyLabel.TextXAlignment=Enum.TextXAlignment.Left
+
+local QualyToggleBG=Instance.new("Frame",F)
+QualyToggleBG.Size=UDim2.new(0,45,0,22)
+QualyToggleBG.Position=UDim2.new(.5,0,.68,0)
+QualyToggleBG.BackgroundColor3=Color3.fromRGB(255,50,50)
+Instance.new("UICorner",QualyToggleBG).CornerRadius=UDim.new(1,0)
+
+local QualyToggleBall=Instance.new("Frame",QualyToggleBG)
+QualyToggleBall.Size=UDim2.new(0,18,0,18)
+QualyToggleBall.Position=UDim2.new(0,2,0,2)
+QualyToggleBall.BackgroundColor3=Color3.new(1,1,1)
+Instance.new("UICorner",QualyToggleBall).CornerRadius=UDim.new(1,0)
+
+local QualyToggleBtn=Instance.new("TextButton",QualyToggleBG)
+QualyToggleBtn.Size=UDim2.new(1,0,1,0)
+QualyToggleBtn.BackgroundTransparency=1
+QualyToggleBtn.Text=""
+
+local QualyToggleStatus=Instance.new("TextLabel",F)
+QualyToggleStatus.Size=UDim2.new(.25,0,0,20)
+QualyToggleStatus.Position=UDim2.new(.72,0,.68,0)
+QualyToggleStatus.BackgroundTransparency=1
+QualyToggleStatus.Text="OFF"
+QualyToggleStatus.Font=Enum.Font.GothamBold
+QualyToggleStatus.TextSize=12
+QualyToggleStatus.TextColor3=Color3.fromRGB(255,50,50)
+QualyToggleStatus.TextXAlignment=Enum.TextXAlignment.Left
+
+local qualyActive=false
+
+-- ANOTAÇÕES SEÇÃO
+local AnotLabel=Instance.new("TextLabel",F)
+AnotLabel.Size=UDim2.new(.4,0,0,20)
+AnotLabel.Position=UDim2.new(.05,0,.84,0)
+AnotLabel.BackgroundTransparency=1
+AnotLabel.Text="Anotações"
+AnotLabel.Font=Enum.Font.GothamBold
+AnotLabel.TextSize=13
+AnotLabel.TextColor3=Color3.new(1,1,1)
+AnotLabel.TextXAlignment=Enum.TextXAlignment.Left
+
+local AnotToggleBG=Instance.new("Frame",F)
+AnotToggleBG.Size=UDim2.new(0,45,0,22)
+AnotToggleBG.Position=UDim2.new(.5,0,.84,0)
+AnotToggleBG.BackgroundColor3=Color3.fromRGB(255,50,50)
+Instance.new("UICorner",AnotToggleBG).CornerRadius=UDim.new(1,0)
+
+local AnotToggleBall=Instance.new("Frame",AnotToggleBG)
+AnotToggleBall.Size=UDim2.new(0,18,0,18)
+AnotToggleBall.Position=UDim2.new(0,2,0,2)
+AnotToggleBall.BackgroundColor3=Color3.new(1,1,1)
+Instance.new("UICorner",AnotToggleBall).CornerRadius=UDim.new(1,0)
+
+local AnotToggleBtn=Instance.new("TextButton",AnotToggleBG)
+AnotToggleBtn.Size=UDim2.new(1,0,1,0)
+AnotToggleBtn.BackgroundTransparency=1
+AnotToggleBtn.Text=""
+
+local AnotToggleStatus=Instance.new("TextLabel",F)
+AnotToggleStatus.Size=UDim2.new(.25,0,0,20)
+AnotToggleStatus.Position=UDim2.new(.72,0,.84,0)
+AnotToggleStatus.BackgroundTransparency=1
+AnotToggleStatus.Text="OFF"
+AnotToggleStatus.Font=Enum.Font.GothamBold
+AnotToggleStatus.TextSize=12
+AnotToggleStatus.TextColor3=Color3.fromRGB(255,50,50)
+AnotToggleStatus.TextXAlignment=Enum.TextXAlignment.Left
+
+local anotActive=false
+
+AnotToggleBtn.MouseButton1Click:Connect(function()
+    anotActive=not anotActive
+    if anotActive then
+        AnotToggleBG.BackgroundColor3=Color3.fromRGB(50,255,50)
+        AnotToggleBall:TweenPosition(UDim2.new(1,-20,0,2),Enum.EasingDirection.Out,Enum.EasingStyle.Quad,.2,true)
+        AnotToggleStatus.Text="ON"
+        AnotToggleStatus.TextColor3=Color3.fromRGB(50,255,50)
+    else
+        AnotToggleBG.BackgroundColor3=Color3.fromRGB(255,50,50)
+        AnotToggleBall:TweenPosition(UDim2.new(0,2,0,2),Enum.EasingDirection.Out,Enum.EasingStyle.Quad,.2,true)
+        AnotToggleStatus.Text="OFF"
+        AnotToggleStatus.TextColor3=Color3.fromRGB(255,50,50)
+    end
+end)
+
+-- CÍRCULO CRONÔMETRO
+local CronoCircle=Instance.new("TextButton",G)
+CronoCircle.Size=UDim2.new(0,50,0,50)
+CronoCircle.Position=UDim2.new(.05,0,.55,0)
+CronoCircle.BackgroundColor3=Color3.fromRGB(20,20,20)
+CronoCircle.Text="⏱"
+CronoCircle.TextSize=30
+CronoCircle.Visible=false
+Instance.new("UICorner",CronoCircle).CornerRadius=UDim.new(1,0)
+
+-- PAINEL CRONÔMETRO
+local CronoPanel=Instance.new("Frame",G)
+CronoPanel.Size=UDim2.new(0,250,0,150)
+CronoPanel.Position=UDim2.new(.3,0,.3,0)
+CronoPanel.BackgroundColor3=Color3.fromRGB(25,25,25)
+CronoPanel.Visible=false
+Instance.new("UICorner",CronoPanel).CornerRadius=UDim.new(0,12)
+
+local dragC=false
+local diC,dsC,spC
+
+local function uC(i)
+    local delta=i.Position-dsC
+    CronoPanel.Position=UDim2.new(
+        spC.X.Scale,
+        spC.X.Offset+delta.X,
+        spC.Y.Scale,
+        spC.Y.Offset+delta.Y
+    )
+end
+
+CronoPanel.InputBegan:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseButton1 then
+        dragC=true
+        dsC=i.Position
+        spC=CronoPanel.Position
+        i.Changed:Connect(function()
+            if i.UserInputState==Enum.UserInputState.End then
+                dragC=false
             end
         end)
     end
 end)
 
-toggleButton.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-        dragInput = input
+CronoPanel.InputChanged:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseMovement then
+        diC=i
     end
 end)
 
-UserInputService.InputChanged:Connect(function(input)
-    if input == dragInput and dragging then
-        update(input)
+R.RenderStepped:Connect(function()
+    if dragC and diC then
+        uC(diC)
     end
 end)
 
--- Função para pegar velocidade do carro (sua função)
-local function getCarSpeedValue(character)
-    if not character then return nil end
-    local humanoid = character:FindFirstChildWhichIsA("Humanoid")
-    if not humanoid then return nil end
-    local seat = humanoid.SeatPart
-    if not seat then return nil end
-    local carModel = seat:FindFirstAncestorWhichIsA("Model")
-    if not carModel then return nil end
-    for _, obj in ipairs(carModel:GetDescendants()) do
-        if obj:IsA("NumberValue") and obj.Name:lower():find("speed") then
-            if obj.Value > 0 and tick() % 1.3 > 0.15 then
-                return obj
-            end
-        end
-    end
-    return nil
+local TimeDisplay=Instance.new("TextLabel",CronoPanel)
+TimeDisplay.Size=UDim2.new(1,0,0,50)
+TimeDisplay.Position=UDim2.new(0,0,.15,0)
+TimeDisplay.BackgroundTransparency=1
+TimeDisplay.Text="00 : 00 , 00"
+TimeDisplay.Font=Enum.Font.GothamBold
+TimeDisplay.TextSize=28
+TimeDisplay.TextColor3=Color3.new(1,1,1)
+
+local TimeLabel=Instance.new("TextLabel",CronoPanel)
+TimeLabel.Size=UDim2.new(1,0,0,20)
+TimeLabel.Position=UDim2.new(0,0,.5,0)
+TimeLabel.BackgroundTransparency=1
+TimeLabel.Text="min   |   seg   |   milseg"
+TimeLabel.Font=Enum.Font.Gotham
+TimeLabel.TextSize=12
+TimeLabel.TextColor3=Color3.fromRGB(180,180,180)
+
+local BtnVolta=Instance.new("TextButton",CronoPanel)
+BtnVolta.Size=UDim2.new(.4,0,0,35)
+BtnVolta.Position=UDim2.new(.05,0,.75,0)
+BtnVolta.BackgroundColor3=Color3.fromRGB(80,80,80)
+BtnVolta.Text="Volta"
+BtnVolta.Font=Enum.Font.GothamBold
+BtnVolta.TextSize=14
+BtnVolta.TextColor3=Color3.new(1,1,1)
+Instance.new("UICorner",BtnVolta).CornerRadius=UDim.new(0,8)
+
+local BtnIniciar=Instance.new("TextButton",CronoPanel)
+BtnIniciar.Size=UDim2.new(.4,0,0,35)
+BtnIniciar.Position=UDim2.new(.55,0,.75,0)
+BtnIniciar.BackgroundColor3=Color3.fromRGB(100,100,255)
+BtnIniciar.Text="Iniciar"
+BtnIniciar.Font=Enum.Font.GothamBold
+BtnIniciar.TextSize=14
+BtnIniciar.TextColor3=Color3.new(1,1,1)
+Instance.new("UICorner",BtnIniciar).CornerRadius=UDim.new(0,8)
+
+local timerRunning=false
+local timerPaused=false
+local startTime=0
+local pausedTime=0
+
+local function formatTime(t)
+    local min=math.floor(t/60)
+    local sec=math.floor(t%60)
+    local ms=math.floor((t%1)*100)
+    return string.format("%02d : %02d , %02d",min,sec,ms)
 end
 
--- Função para criar BillboardGui (SEM FUNDO CINZA)
-local function createBillboard(character, username)
-    local head = character:WaitForChild("Head")
-    
-    local billboard = Instance.new("BillboardGui")
-    billboard.Name = "SpeedDisplay"
-    billboard.Adornee = head
-    billboard.Size = UDim2.new(0, 200, 0, 60)
-    billboard.StudsOffset = Vector3.new(0, 3, 0)
-    billboard.AlwaysOnTop = true
-    billboard.Parent = head
-    
-    local usernameLabel = Instance.new("TextLabel")
-    usernameLabel.Size = UDim2.new(1, 0, 0.5, 0)
-    usernameLabel.Position = UDim2.new(0, 0, 0, 0)
-    usernameLabel.BackgroundTransparency = 1
-    usernameLabel.Text = username
-    usernameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    usernameLabel.Font = Enum.Font.GothamBold
-    usernameLabel.TextSize = 18
-    usernameLabel.TextStrokeTransparency = 0.5
-    usernameLabel.Parent = billboard
-    
-    local speedLabel = Instance.new("TextLabel")
-    speedLabel.Size = UDim2.new(1, 0, 0.5, 0)
-    speedLabel.Position = UDim2.new(0, 0, 0.5, 0)
-    speedLabel.BackgroundTransparency = 1
-    speedLabel.Text = "Vel: 0"
-    speedLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    speedLabel.Font = Enum.Font.GothamBold
-    speedLabel.TextSize = 16
-    speedLabel.TextStrokeTransparency = 0.5
-    speedLabel.RichText = true
-    speedLabel.Parent = billboard
-    
-    return billboard, speedLabel
-end
-
--- Função para verificar se jogador está dirigindo
-local function isPlayerDriving(character)
-    local humanoid = character:FindFirstChildWhichIsA("Humanoid")
-    if humanoid and humanoid.SeatPart and humanoid.SeatPart:IsA("VehicleSeat") then
-        return true
-    end
-    return false
-end
-
--- Loop principal de monitoramento
-RunService.RenderStepped:Connect(function()
-    if not isActive then return end
-    
-    for _, otherPlayer in pairs(Players:GetPlayers()) do
-        local character = otherPlayer.Character
-        
-        if character then
-            local isDriving = isPlayerDriving(character)
-            
-            if isDriving then
-                -- Criar billboard se não existir
-                if not billboardGuis[otherPlayer.UserId] then
-                    local billboard, speedLabel = createBillboard(character, otherPlayer.Name)
-                    billboardGuis[otherPlayer.UserId] = {billboard = billboard, label = speedLabel}
-                end
-                
-                -- Pegar velocidade usando sua função
-                local speedValue = getCarSpeedValue(character)
-                local speed = 0
-                
-                if speedValue then
-                    speed = speedValue.Value
-                end
-                
-                local speedLabel = billboardGuis[otherPlayer.UserId].label
-                
-                if speed > 100 then
-                    speedLabel.Text = '<font color="rgb(255,255,255)">Vel: </font><font color="rgb(255,50,50)">' .. math.floor(speed) .. ' ⚠️</font>'
-                else
-                    speedLabel.Text = '<font color="rgb(255,255,255)">Vel: </font><font color="rgb(50,255,50)">' .. math.floor(speed) .. '</font>'
-                end
-            else
-                -- Remover billboard se não está dirigindo
-                if billboardGuis[otherPlayer.UserId] then
-                    billboardGuis[otherPlayer.UserId].billboard:Destroy()
-                    billboardGuis[otherPlayer.UserId] = nil
-                end
-            end
-        end
+R.RenderStepped:Connect(function()
+    if timerRunning and not timerPaused then
+        local elapsed=tick()-startTime
+        TimeDisplay.Text=formatTime(elapsed)
     end
 end)
 
--- Função de toggle
-toggleButton.MouseButton1Click:Connect(function()
-    isActive = not isActive
-    
-    if isActive then
-        toggleButton.BackgroundColor3 = Color3.fromRGB(50, 255, 50)
-        toggleButton.Text = "ON"
+BtnIniciar.MouseButton1Click:Connect(function()
+    if not timerRunning then
+        timerRunning=true
+        timerPaused=false
+        startTime=tick()-pausedTime
+        BtnIniciar.Text="Parar"
+        BtnIniciar.BackgroundColor3=Color3.fromRGB(255,50,50)
+    elseif not timerPaused then
+        timerPaused=true
+        pausedTime=tick()-startTime
+        BtnIniciar.Text="Retomar"
+        BtnIniciar.BackgroundColor3=Color3.fromRGB(100,100,255)
     else
-        toggleButton.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
-        toggleButton.Text = "OFF"
-        
-        -- Remover todos os billboards
-        for _, data in pairs(billboardGuis) do
-            if data.billboard then
-                data.billboard:Destroy()
-            end
-        end
-        billboardGuis = {}
+        timerPaused=false
+        startTime=tick()-pausedTime
+        BtnIniciar.Text="Parar"
+        BtnIniciar.BackgroundColor3=Color3.fromRGB(255,50,50)
     end
 end)
 
--- Limpeza ao remover jogadores
-Players.PlayerRemoving:Connect(function(removedPlayer)
-    if billboardGuis[removedPlayer.UserId] then
-        billboardGuis[removedPlayer.UserId].billboard:Destroy()
-        billboardGuis[removedPlayer.UserId] = nil
+BtnVolta.MouseButton1Click:Connect(function()
+    timerRunning=false
+    timerPaused=false
+    startTime=0
+    pausedTime=0
+    TimeDisplay.Text="00 : 00 , 00"
+    BtnIniciar.Text="Iniciar"
+    BtnIniciar.BackgroundColor3=Color3.fromRGB(100,100,255)
+end)
+
+CronoCircle.MouseButton1Click:Connect(function()
+    CronoPanel.Visible=not CronoPanel.Visible
+end)
+
+task.spawn(function()
+    while task.wait(.1)do
+        CronoCircle.Visible=cronoActive
+        if not cronoActive then
+            CronoPanel.Visible=false
+        end
     end
 end)
+
+-- ==================== QUALY AUTOMÁTICA ====================
+local LINE_LENGTH=60
+local LINE_WIDTH=0.5
+local LINE_HEIGHT=0.3
+
+local startLine=nil
+local linePosition=nil
+local lineNormal=nil
+local lineFolder=nil
+local isQualifying=false
+local lapCount=0
+local qualyStartTime=0
+local qualyTimes={}
+local wasInFront=nil
+local detectionConnection=nil
+
+local QualyCircle=Instance.new("TextButton",G)
+QualyCircle.Size=UDim2.new(0,60,0,60)
+QualyCircle.Position=UDim2.new(.05,0,.45,0)
+QualyCircle.BackgroundColor3=Color3.fromRGB(20,20,20)
+QualyCircle.Text="🧠"
+QualyCircle.TextSize=30
+QualyCircle.Visible=false
+Instance.new("UICorner",QualyCircle).CornerRadius=UDim.new(1,0)
+
+local QualyPanel=Instance.new("Frame",G)
+QualyPanel.Size=UDim2.new(0,350,0,500)
+QualyPanel.Position=UDim2.new(0.5,-175,0.5,-250)
+QualyPanel.BackgroundColor3=Color3.fromRGB(15,15,15)
+QualyPanel.Visible=false
+Instance.new("UICorner",QualyPanel).CornerRadius=UDim.new(0,12)
+
+local dragQ=false
+local diQ,dsQ,spQ
+
+local function uQ(i)
+    local delta=i.Position-dsQ
+    QualyPanel.Position=UDim2.new(
+        spQ.X.Scale,
+        spQ.X.Offset+delta.X,
+        spQ.Y.Scale,
+        spQ.Y.Offset+delta.Y
+    )
+end
+
+QualyPanel.InputBegan:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseButton1 then
+        dragQ=true
+        dsQ=i.Position
+        spQ=QualyPanel.Position
+        i.Changed:Connect(function()
+            if i.UserInputState==Enum.UserInputState.End then
+                dragQ=false
+            end
+        end)
+    end
+end)
+
+QualyPanel.InputChanged:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseMovement then
+        diQ=i
+    end
+end)
+
+R.RenderStepped:Connect(function()
+    if dragQ and diQ then
+        uQ(diQ)
+    end
+end)
+
+local QualyTitle=Instance.new("TextLabel",QualyPanel)
+QualyTitle.Size=UDim2.new(1,0,0,50)
+QualyTitle.BackgroundTransparency=1
+QualyTitle.Text="Qualy Automática 🧠"
+QualyTitle.TextColor3=Color3.new(1,1,1)
+QualyTitle.TextSize=24
+QualyTitle.Font=Enum.Font.GothamBold
+
+local QualyTimer=Instance.new("TextLabel",QualyPanel)
+QualyTimer.Size=UDim2.new(1,-20,0,60)
+QualyTimer.Position=UDim2.new(0,10,0,60)
+QualyTimer.BackgroundColor3=Color3.fromRGB(25,25,25)
+QualyTimer.Text="00:00.000"
+QualyTimer.TextColor3=Color3.fromRGB(100,200,255)
+QualyTimer.TextSize=32
+QualyTimer.Font=Enum.Font.GothamBold
+Instance.new("UICorner",QualyTimer).CornerRadius=UDim.new(0,8)
+
+local QualyReset=Instance.new("TextButton",QualyPanel)
+QualyReset.Size=UDim2.new(1,-20,0,45)
+QualyReset.Position=UDim2.new(0,10,0,135)
+QualyReset.BackgroundColor3=Color3.fromRGB(200,50,50)
+QualyReset.Text="Resetar Timer"
+QualyReset.TextColor3=Color3.new(1,1,1)
+QualyReset.TextSize=18
+QualyReset.Font=Enum.Font.GothamBold
+QualyReset.Visible=false
+Instance.new("UICorner",QualyReset).CornerRadius=UDim.new(0,8)
+
+local QualyMark=Instance.new("TextButton",QualyPanel)
+QualyMark.Size=UDim2.new(1,-20,0,50)
+QualyMark.Position=UDim2.new(0,10,0,135)
+QualyMark.BackgroundColor3=Color3.fromRGB(90,80,200)
+QualyMark.Text="Marcar Largada"
+QualyMark.TextColor3=Color3.new(1,1,1)
+QualyMark.TextSize=20
+QualyMark.Font=Enum.Font.GothamBold
+Instance.new("UICorner",QualyMark).CornerRadius=UDim.new(0,8)
+
+local QualyScroll=Instance.new("ScrollingFrame",QualyPanel)
+QualyScroll.Size=UDim2.new(1,-20,1,-205)
+QualyScroll.Position=UDim2.new(0,10,0,195)
+QualyScroll.BackgroundColor3=Color3.fromRGB(25,25,25)
+QualyScroll.BorderSizePixel=0
+QualyScroll.ScrollBarThickness=6
+Instance.new("UICorner",QualyScroll).CornerRadius=UDim.new(0,8)
+
+local QualyList=Instance.new("UIListLayout",QualyScroll)
+QualyList.SortOrder=Enum.SortOrder.LayoutOrder
+QualyList.Padding=UDim.new(0,5)
+
+QualyCircle.MouseButton1Click:Connect(function()
+    QualyPanel.Visible=not QualyPanel.Visible
+end)
+
+task.spawn(function()
+    while task.wait(.1)do
+        QualyCircle.Visible=qualyActive
+        if not qualyActive then
+            QualyPanel.Visible=false
+        end
+    end
+end)
+
+local function formatQualyTime(seconds)
+    local mins=math.floor(seconds/60)
+    local secs=math.floor(seconds%60)
+    local millis=math.floor((seconds%1)*1000)
+    return string.format("%02d:%02d.%03d",mins,secs,millis)
+end
+
+local function createStartLine(position,lookVector)
+    if lineFolder then
+        lineFolder:Destroy()
+    end
+    
+    lineFolder=Instance.new("Folder")
+    lineFolder.Name="QualyStartLine"
+    lineFolder.Parent=workspace
+    
+    local rayOrigin=position
+    local rayDirection=Vector3.new(0,-50,0)
+    local raycastParams=RaycastParams.new()
+    raycastParams.FilterType=Enum.RaycastFilterType.Exclude
+    raycastParams.FilterDescendantsInstances={L.Character,lineFolder}
+    
+    local rayResult=workspace:Raycast(rayOrigin,rayDirection,raycastParams)
+    local groundY=rayResult and rayResult.Position.Y or position.Y-3
+    
+    local rightVector=Vector3.new(-lookVector.Z,0,lookVector.X).Unit
+    local lineCenter=Vector3.new(position.X,groundY+LINE_HEIGHT/2,position.Z)
+    
+    linePosition=lineCenter
+    lineNormal=lookVector
+    
+    local line=Instance.new("Part")
+    line.Name="StartLine"
+    line.Size=Vector3.new(LINE_LENGTH,LINE_HEIGHT,LINE_WIDTH)
+    line.Position=lineCenter
+    line.CFrame=CFrame.new(lineCenter,lineCenter+rightVector)*CFrame.Angles(0,math.rad(90),0)
+    line.Anchored=true
+    line.CanCollide=false
+    line.Material=Enum.Material.Neon
+    line.BrickColor=BrickColor.new("Lime green")
+    line.Transparency=0.2
+    line.Parent=lineFolder
+    
+    local light=Instance.new("PointLight")
+    light.Color=Color3.fromRGB(0,255,0)
+    light.Brightness=3
+    light.Range=30
+    light.Parent=line
+    
+    for i=-1,1,2 do
+        local marker=Instance.new("Part")
+        marker.Size=Vector3.new(2,4,2)
+        marker.Position=lineCenter+(rightVector*(LINE_LENGTH/2)*i)
+        marker.Anchored=true
+        marker.CanCollide=false
+        marker.Material=Enum.Material.Neon
+        marker.BrickColor=BrickColor.new("Really red")
+        marker.Transparency=0.3
+        marker.Parent=lineFolder
+        
+        local markerLight=Instance.new("PointLight")
+        markerLight.Color=Color3.
