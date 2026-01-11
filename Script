@@ -66,27 +66,36 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- Função para criar BillboardGui
+-- Função para pegar velocidade do carro (sua função)
+local function getCarSpeedValue(character)
+    if not character then return nil end
+    local humanoid = character:FindFirstChildWhichIsA("Humanoid")
+    if not humanoid then return nil end
+    local seat = humanoid.SeatPart
+    if not seat then return nil end
+    local carModel = seat:FindFirstAncestorWhichIsA("Model")
+    if not carModel then return nil end
+    for _, obj in ipairs(carModel:GetDescendants()) do
+        if obj:IsA("NumberValue") and obj.Name:lower():find("speed") then
+            if obj.Value > 0 and tick() % 1.3 > 0.15 then
+                return obj
+            end
+        end
+    end
+    return nil
+end
+
+-- Função para criar BillboardGui (SEM FUNDO CINZA)
 local function createBillboard(character, username)
     local head = character:WaitForChild("Head")
     
     local billboard = Instance.new("BillboardGui")
     billboard.Name = "SpeedDisplay"
     billboard.Adornee = head
-    billboard.Size = UDim2.new(0, 200, 0, 80)
+    billboard.Size = UDim2.new(0, 200, 0, 60)
     billboard.StudsOffset = Vector3.new(0, 3, 0)
     billboard.AlwaysOnTop = true
     billboard.Parent = head
-    
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(1, 0, 1, 0)
-    frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-    frame.BackgroundTransparency = 0.3
-    frame.Parent = billboard
-    
-    local frameCorner = Instance.new("UICorner")
-    frameCorner.CornerRadius = UDim.new(0, 8)
-    frameCorner.Parent = frame
     
     local usernameLabel = Instance.new("TextLabel")
     usernameLabel.Size = UDim2.new(1, 0, 0.5, 0)
@@ -95,8 +104,9 @@ local function createBillboard(character, username)
     usernameLabel.Text = username
     usernameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
     usernameLabel.Font = Enum.Font.GothamBold
-    usernameLabel.TextSize = 16
-    usernameLabel.Parent = frame
+    usernameLabel.TextSize = 18
+    usernameLabel.TextStrokeTransparency = 0.5
+    usernameLabel.Parent = billboard
     
     local speedLabel = Instance.new("TextLabel")
     speedLabel.Size = UDim2.new(1, 0, 0.5, 0)
@@ -105,33 +115,21 @@ local function createBillboard(character, username)
     speedLabel.Text = "Vel: 0"
     speedLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
     speedLabel.Font = Enum.Font.GothamBold
-    speedLabel.TextSize = 14
+    speedLabel.TextSize = 16
+    speedLabel.TextStrokeTransparency = 0.5
     speedLabel.RichText = true
-    speedLabel.Parent = frame
+    speedLabel.Parent = billboard
     
     return billboard, speedLabel
 end
 
 -- Função para verificar se jogador está dirigindo
 local function isPlayerDriving(character)
-    local humanoid = character:FindFirstChild("Humanoid")
+    local humanoid = character:FindFirstChildWhichIsA("Humanoid")
     if humanoid and humanoid.SeatPart and humanoid.SeatPart:IsA("VehicleSeat") then
-        return true, humanoid.SeatPart
+        return true
     end
-    return false, nil
-end
-
--- Função para obter velocidade configurada
-local function getConfiguredSpeed(vehicleSeat)
-    -- Procura por valores de velocidade no VehicleSeat ou em seus ancestrais
-    local speedValue = vehicleSeat:FindFirstChild("MaxSpeed") or vehicleSeat:FindFirstChild("Speed")
-    
-    if speedValue and (speedValue:IsA("NumberValue") or speedValue:IsA("IntValue")) then
-        return speedValue.Value
-    end
-    
-    -- Se não encontrar, usa a propriedade padrão MaxSpeed do VehicleSeat
-    return vehicleSeat.MaxSpeed or 0
+    return false
 end
 
 -- Loop principal de monitoramento
@@ -142,7 +140,7 @@ RunService.RenderStepped:Connect(function()
         local character = otherPlayer.Character
         
         if character then
-            local isDriving, vehicleSeat = isPlayerDriving(character)
+            local isDriving = isPlayerDriving(character)
             
             if isDriving then
                 -- Criar billboard se não existir
@@ -151,8 +149,14 @@ RunService.RenderStepped:Connect(function()
                     billboardGuis[otherPlayer.UserId] = {billboard = billboard, label = speedLabel}
                 end
                 
-                -- Atualizar velocidade
-                local speed = getConfiguredSpeed(vehicleSeat)
+                -- Pegar velocidade usando sua função
+                local speedValue = getCarSpeedValue(character)
+                local speed = 0
+                
+                if speedValue then
+                    speed = speedValue.Value
+                end
+                
                 local speedLabel = billboardGuis[otherPlayer.UserId].label
                 
                 if speed > 100 then
