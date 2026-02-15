@@ -1,0 +1,1371 @@
+P=game:GetService("Players")
+local R=game:GetService("RunService")
+local L=P.LocalPlayer 
+local e=false 
+local d={}
+local m=0 
+
+local function g(c)
+    local h=c:FindFirstChildWhichIsA("Humanoid")
+    if not h then return end 
+    local s=h.SeatPart 
+    if not s then return end 
+    local M=s:FindFirstAncestorWhichIsA("Model")
+    if not M then return end 
+    for _,o in ipairs(M:GetDescendants())do 
+        if o:IsA("NumberValue")and o.Name:lower():find("speed")then 
+            return o 
+        end 
+    end 
+end
+
+local G=Instance.new("ScreenGui")
+G.ResetOnSpawn=false 
+G.Name="Velocidade_SG"
+
+local function p(g)
+    local ok=false 
+    pcall(function()
+        if syn and syn.protect_gui then 
+            syn.protect_gui(g)
+            g.Parent=L:FindFirstChild("PlayerGui")or gethui()
+            ok=true 
+        end 
+    end)
+    if ok then 
+        if not g.Parent then 
+            g.Parent=L:WaitForChild("PlayerGui")
+        end 
+        return 
+    end 
+    pcall(function()
+        if gethui then 
+            g.Parent=gethui()
+            ok=true 
+        end 
+    end)
+    if ok then return end 
+    g.Parent=L:WaitForChild("PlayerGui")
+end
+
+p(G)
+
+local F=Instance.new("Frame",G)
+F.Size=UDim2.new(0,200,0,280)
+F.Position=UDim2.new(.05,0,.65,0)
+F.BackgroundColor3=Color3.fromRGB(30,30,30)
+F.BorderSizePixel=0 
+Instance.new("UICorner",F).CornerRadius=UDim.new(0,12)
+
+local drag=false 
+local di,ds,sp 
+local U=game:GetService("UserInputService")
+
+local function u(i)
+    local d=i.Position-ds 
+    F.Position=UDim2.new(
+        sp.X.Scale,
+        sp.X.Offset+d.X,
+        sp.Y.Scale,
+        sp.Y.Offset+d.Y
+    )
+end
+
+F.InputBegan:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseButton1 then 
+        drag=true 
+        ds=i.Position 
+        sp=F.Position 
+        i.Changed:Connect(function()
+            if i.UserInputState==Enum.UserInputState.End then 
+                drag=false 
+            end 
+        end)
+    end 
+end)
+
+F.InputChanged:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseMovement then 
+        di=i 
+    end 
+end)
+
+R.RenderStepped:Connect(function()
+    if drag and di then 
+        u(di)
+    end 
+end)
+
+local T=Instance.new("TextLabel",F)
+T.Size=UDim2.new(1,0,0,25)
+T.BackgroundTransparency=1 
+T.Text="Painel - Kart Brookhaven 🏁" 
+T.Font=Enum.Font.GothamBold 
+T.TextSize=14 
+T.TextColor3=Color3.new(1,1,1)
+
+local B=Instance.new("TextButton",F)
+B.Size=UDim2.new(.9,0,0,28)
+B.Position=UDim2.new(.05,0,.11,0)
+B.BackgroundColor3=Color3.fromRGB(50,200,100)
+B.TextColor3=Color3.new(1,1,1)
+B.Text="Ativar"
+B.Font=Enum.Font.GothamBold 
+B.TextSize=14 
+Instance.new("UICorner",B).CornerRadius=UDim.new(0,6)
+
+local S=Instance.new("TextBox",F)
+S.Size=UDim2.new(.9,0,0,26)
+S.Position=UDim2.new(.05,0,.26,0)
+S.BackgroundColor3=Color3.fromRGB(60,60,60)
+S.TextColor3=Color3.new(1,1,1)
+S.PlaceholderText="Limite de Velocidade ⚠️"
+S.Font=Enum.Font.Gotham 
+S.TextSize=14 
+Instance.new("UICorner",S).CornerRadius=UDim.new(0,6)
+
+-- CRONÔMETRO
+local CronoLabel=Instance.new("TextLabel",F)
+CronoLabel.Size=UDim2.new(.4,0,0,18)
+CronoLabel.Position=UDim2.new(.05,0,.42,0)
+CronoLabel.BackgroundTransparency=1
+CronoLabel.Text="Cronômetro"
+CronoLabel.Font=Enum.Font.GothamBold
+CronoLabel.TextSize=12
+CronoLabel.TextColor3=Color3.new(1,1,1)
+CronoLabel.TextXAlignment=Enum.TextXAlignment.Left
+
+local ToggleBG=Instance.new("Frame",F)
+ToggleBG.Size=UDim2.new(0,42,0,20)
+ToggleBG.Position=UDim2.new(.48,0,.42,0)
+ToggleBG.BackgroundColor3=Color3.fromRGB(255,50,50)
+Instance.new("UICorner",ToggleBG).CornerRadius=UDim.new(1,0)
+
+local ToggleBall=Instance.new("Frame",ToggleBG)
+ToggleBall.Size=UDim2.new(0,16,0,16)
+ToggleBall.Position=UDim2.new(0,2,0,2)
+ToggleBall.BackgroundColor3=Color3.new(1,1,1)
+Instance.new("UICorner",ToggleBall).CornerRadius=UDim.new(1,0)
+
+local ToggleBtn=Instance.new("TextButton",ToggleBG)
+ToggleBtn.Size=UDim2.new(1,0,1,0)
+ToggleBtn.BackgroundTransparency=1
+ToggleBtn.Text=""
+
+local ToggleStatus=Instance.new("TextLabel",F)
+ToggleStatus.Size=UDim2.new(.25,0,0,18)
+ToggleStatus.Position=UDim2.new(.78,0,.42,0)
+ToggleStatus.BackgroundTransparency=1
+ToggleStatus.Text="OFF"
+ToggleStatus.Font=Enum.Font.GothamBold
+ToggleStatus.TextSize=11
+ToggleStatus.TextColor3=Color3.fromRGB(255,50,50)
+ToggleStatus.TextXAlignment=Enum.TextXAlignment.Left
+
+local cronoActive=false
+
+ToggleBtn.MouseButton1Click:Connect(function()
+    cronoActive=not cronoActive
+    if cronoActive then
+        ToggleBG.BackgroundColor3=Color3.fromRGB(50,255,50)
+        ToggleBall:TweenPosition(UDim2.new(1,-18,0,2),Enum.EasingDirection.Out,Enum.EasingStyle.Quad,.2,true)
+        ToggleStatus.Text="ON"
+        ToggleStatus.TextColor3=Color3.fromRGB(50,255,50)
+    else
+        ToggleBG.BackgroundColor3=Color3.fromRGB(255,50,50)
+        ToggleBall:TweenPosition(UDim2.new(0,2,0,2),Enum.EasingDirection.Out,Enum.EasingStyle.Quad,.2,true)
+        ToggleStatus.Text="OFF"
+        ToggleStatus.TextColor3=Color3.fromRGB(255,50,50)
+    end
+end)
+
+-- ANOTAÇÕES
+local NotasLabel=Instance.new("TextLabel",F)
+NotasLabel.Size=UDim2.new(.4,0,0,18)
+NotasLabel.Position=UDim2.new(.05,0,.54,0)
+NotasLabel.BackgroundTransparency=1
+NotasLabel.Text="Anotações"
+NotasLabel.Font=Enum.Font.GothamBold
+NotasLabel.TextSize=12
+NotasLabel.TextColor3=Color3.new(1,1,1)
+NotasLabel.TextXAlignment=Enum.TextXAlignment.Left
+
+local ToggleBG2=Instance.new("Frame",F)
+ToggleBG2.Size=UDim2.new(0,42,0,20)
+ToggleBG2.Position=UDim2.new(.48,0,.54,0)
+ToggleBG2.BackgroundColor3=Color3.fromRGB(255,50,50)
+Instance.new("UICorner",ToggleBG2).CornerRadius=UDim.new(1,0)
+
+local ToggleBall2=Instance.new("Frame",ToggleBG2)
+ToggleBall2.Size=UDim2.new(0,16,0,16)
+ToggleBall2.Position=UDim2.new(0,2,0,2)
+ToggleBall2.BackgroundColor3=Color3.new(1,1,1)
+Instance.new("UICorner",ToggleBall2).CornerRadius=UDim.new(1,0)
+
+local ToggleBtn2=Instance.new("TextButton",ToggleBG2)
+ToggleBtn2.Size=UDim2.new(1,0,1,0)
+ToggleBtn2.BackgroundTransparency=1
+ToggleBtn2.Text=""
+
+local ToggleStatus2=Instance.new("TextLabel",F)
+ToggleStatus2.Size=UDim2.new(.25,0,0,18)
+ToggleStatus2.Position=UDim2.new(.78,0,.54,0)
+ToggleStatus2.BackgroundTransparency=1
+ToggleStatus2.Text="OFF"
+ToggleStatus2.Font=Enum.Font.GothamBold
+ToggleStatus2.TextSize=11
+ToggleStatus2.TextColor3=Color3.fromRGB(255,50,50)
+ToggleStatus2.TextXAlignment=Enum.TextXAlignment.Left
+
+local notasActive=false
+
+ToggleBtn2.MouseButton1Click:Connect(function()
+    notasActive=not notasActive
+    if notasActive then
+        ToggleBG2.BackgroundColor3=Color3.fromRGB(50,255,50)
+        ToggleBall2:TweenPosition(UDim2.new(1,-18,0,2),Enum.EasingDirection.Out,Enum.EasingStyle.Quad,.2,true)
+        ToggleStatus2.Text="ON"
+        ToggleStatus2.TextColor3=Color3.fromRGB(50,255,50)
+    else
+        ToggleBG2.BackgroundColor3=Color3.fromRGB(255,50,50)
+        ToggleBall2:TweenPosition(UDim2.new(0,2,0,2),Enum.EasingDirection.Out,Enum.EasingStyle.Quad,.2,true)
+        ToggleStatus2.Text="OFF"
+        ToggleStatus2.TextColor3=Color3.fromRGB(255,50,50)
+    end
+end)
+
+-- QUALY AUTOMÁTICA
+local QualyLabel=Instance.new("TextLabel",F)
+QualyLabel.Size=UDim2.new(.4,0,0,18)
+QualyLabel.Position=UDim2.new(.05,0,.66,0)
+QualyLabel.BackgroundTransparency=1
+QualyLabel.Text="Qualy Auto"
+QualyLabel.Font=Enum.Font.GothamBold
+QualyLabel.TextSize=12
+QualyLabel.TextColor3=Color3.new(1,1,1)
+QualyLabel.TextXAlignment=Enum.TextXAlignment.Left
+
+local ToggleBG3=Instance.new("Frame",F)
+ToggleBG3.Size=UDim2.new(0,42,0,20)
+ToggleBG3.Position=UDim2.new(.48,0,.66,0)
+ToggleBG3.BackgroundColor3=Color3.fromRGB(255,50,50)
+Instance.new("UICorner",ToggleBG3).CornerRadius=UDim.new(1,0)
+
+local ToggleBall3=Instance.new("Frame",ToggleBG3)
+ToggleBall3.Size=UDim2.new(0,16,0,16)
+ToggleBall3.Position=UDim2.new(0,2,0,2)
+ToggleBall3.BackgroundColor3=Color3.new(1,1,1)
+Instance.new("UICorner",ToggleBall3).CornerRadius=UDim.new(1,0)
+
+local ToggleBtn3=Instance.new("TextButton",ToggleBG3)
+ToggleBtn3.Size=UDim2.new(1,0,1,0)
+ToggleBtn3.BackgroundTransparency=1
+ToggleBtn3.Text=""
+
+local ToggleStatus3=Instance.new("TextLabel",F)
+ToggleStatus3.Size=UDim2.new(.25,0,0,18)
+ToggleStatus3.Position=UDim2.new(.78,0,.66,0)
+ToggleStatus3.BackgroundTransparency=1
+ToggleStatus3.Text="OFF"
+ToggleStatus3.Font=Enum.Font.GothamBold
+ToggleStatus3.TextSize=11
+ToggleStatus3.TextColor3=Color3.fromRGB(255,50,50)
+ToggleStatus3.TextXAlignment=Enum.TextXAlignment.Left
+
+local qualyActive=false
+
+ToggleBtn3.MouseButton1Click:Connect(function()
+    qualyActive=not qualyActive
+    if qualyActive then
+        ToggleBG3.BackgroundColor3=Color3.fromRGB(50,255,50)
+        ToggleBall3:TweenPosition(UDim2.new(1,-18,0,2),Enum.EasingDirection.Out,Enum.EasingStyle.Quad,.2,true)
+        ToggleStatus3.Text="ON"
+        ToggleStatus3.TextColor3=Color3.fromRGB(50,255,50)
+    else
+        ToggleBG3.BackgroundColor3=Color3.fromRGB(255,50,50)
+        ToggleBall3:TweenPosition(UDim2.new(0,2,0,2),Enum.EasingDirection.Out,Enum.EasingStyle.Quad,.2,true)
+        ToggleStatus3.Text="OFF"
+        ToggleStatus3.TextColor3=Color3.fromRGB(255,50,50)
+    end
+end)
+
+-- CÍRCULO CRONÔMETRO
+local CronoCircle=Instance.new("TextButton",G)
+CronoCircle.Size=UDim2.new(0,50,0,50)
+CronoCircle.Position=UDim2.new(.05,0,.5,0)
+CronoCircle.BackgroundColor3=Color3.fromRGB(20,20,20)
+CronoCircle.Text="⏱"
+CronoCircle.TextSize=28
+CronoCircle.Visible=false
+Instance.new("UICorner",CronoCircle).CornerRadius=UDim.new(1,0)
+
+local dragCC=false
+local diCC,dsCC,spCC
+
+CronoCircle.InputBegan:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseButton1 then
+        dragCC=true
+        dsCC=i.Position
+        spCC=CronoCircle.Position
+        i.Changed:Connect(function()
+            if i.UserInputState==Enum.UserInputState.End then
+                dragCC=false
+            end
+        end)
+    end
+end)
+
+CronoCircle.InputChanged:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseMovement then
+        diCC=i
+    end
+end)
+
+R.RenderStepped:Connect(function()
+    if dragCC and diCC then
+        local delta=diCC.Position-dsCC
+        CronoCircle.Position=UDim2.new(spCC.X.Scale,spCC.X.Offset+delta.X,spCC.Y.Scale,spCC.Y.Offset+delta.Y)
+    end
+end)
+
+-- CÍRCULO ANOTAÇÕES
+local NotasCircle=Instance.new("TextButton",G)
+NotasCircle.Size=UDim2.new(0,50,0,50)
+NotasCircle.Position=UDim2.new(.05,60,.5,0)
+NotasCircle.BackgroundColor3=Color3.fromRGB(20,20,20)
+NotasCircle.Text="🗒"
+NotasCircle.TextSize=28
+NotasCircle.Visible=false
+Instance.new("UICorner",NotasCircle).CornerRadius=UDim.new(1,0)
+
+local dragNC=false
+local diNC,dsNC,spNC
+
+NotasCircle.InputBegan:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseButton1 then
+        dragNC=true
+        dsNC=i.Position
+        spNC=NotasCircle.Position
+        i.Changed:Connect(function()
+            if i.UserInputState==Enum.UserInputState.End then
+                dragNC=false
+            end
+        end)
+    end
+end)
+
+NotasCircle.InputChanged:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseMovement then
+        diNC=i
+    end
+end)
+
+R.RenderStepped:Connect(function()
+    if dragNC and diNC then
+        local delta=diNC.Position-dsNC
+        NotasCircle.Position=UDim2.new(spNC.X.Scale,spNC.X.Offset+delta.X,spNC.Y.Scale,spNC.Y.Offset+delta.Y)
+    end
+end)
+
+-- CÍRCULO QUALY AUTOMÁTICA
+local QualyCircle=Instance.new("TextButton",G)
+QualyCircle.Size=UDim2.new(0,50,0,50)
+QualyCircle.Position=UDim2.new(.05,120,.5,0)
+QualyCircle.BackgroundColor3=Color3.fromRGB(20,20,20)
+QualyCircle.Text="🧠"
+QualyCircle.TextSize=28
+QualyCircle.Visible=false
+Instance.new("UICorner",QualyCircle).CornerRadius=UDim.new(1,0)
+
+local dragQC=false
+local diQC,dsQC,spQC
+
+QualyCircle.InputBegan:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseButton1 then
+        dragQC=true
+        dsQC=i.Position
+        spQC=QualyCircle.Position
+        i.Changed:Connect(function()
+            if i.UserInputState==Enum.UserInputState.End then
+                dragQC=false
+            end
+        end)
+    end
+end)
+
+QualyCircle.InputChanged:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseMovement then
+        diQC=i
+    end
+end)
+
+R.RenderStepped:Connect(function()
+    if dragQC and diQC then
+        local delta=diQC.Position-dsQC
+        QualyCircle.Position=UDim2.new(spQC.X.Scale,spQC.X.Offset+delta.X,spQC.Y.Scale,spQC.Y.Offset+delta.Y)
+    end
+end)
+
+-- PAINEL CRONÔMETRO
+local CronoPanel=Instance.new("Frame",G)
+CronoPanel.Size=UDim2.new(0,250,0,150)
+CronoPanel.Position=UDim2.new(.3,0,.3,0)
+CronoPanel.BackgroundColor3=Color3.fromRGB(25,25,25)
+CronoPanel.Visible=false
+Instance.new("UICorner",CronoPanel).CornerRadius=UDim.new(0,12)
+
+local dragC=false
+local diC,dsC,spC
+
+CronoPanel.InputBegan:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseButton1 then
+        dragC=true
+        dsC=i.Position
+        spC=CronoPanel.Position
+        i.Changed:Connect(function()
+            if i.UserInputState==Enum.UserInputState.End then
+                dragC=false
+            end
+        end)
+    end
+end)
+
+CronoPanel.InputChanged:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseMovement then
+        diC=i
+    end
+end)
+
+R.RenderStepped:Connect(function()
+    if dragC and diC then
+        local delta=diC.Position-dsC
+        CronoPanel.Position=UDim2.new(spC.X.Scale,spC.X.Offset+delta.X,spC.Y.Scale,spC.Y.Offset+delta.Y)
+    end
+end)
+
+local TimeDisplay=Instance.new("TextLabel",CronoPanel)
+TimeDisplay.Size=UDim2.new(1,0,0,50)
+TimeDisplay.Position=UDim2.new(0,0,.15,0)
+TimeDisplay.BackgroundTransparency=1
+TimeDisplay.Text="00 : 00 , 00"
+TimeDisplay.Font=Enum.Font.GothamBold
+TimeDisplay.TextSize=28
+TimeDisplay.TextColor3=Color3.new(1,1,1)
+
+local TimeLabel=Instance.new("TextLabel",CronoPanel)
+TimeLabel.Size=UDim2.new(1,0,0,20)
+TimeLabel.Position=UDim2.new(0,0,.5,0)
+TimeLabel.BackgroundTransparency=1
+TimeLabel.Text="min   |   seg   |   milseg"
+TimeLabel.Font=Enum.Font.Gotham
+TimeLabel.TextSize=12
+TimeLabel.TextColor3=Color3.fromRGB(180,180,180)
+
+local BtnVolta=Instance.new("TextButton",CronoPanel)
+BtnVolta.Size=UDim2.new(.4,0,0,35)
+BtnVolta.Position=UDim2.new(.05,0,.75,0)
+BtnVolta.BackgroundColor3=Color3.fromRGB(80,80,80)
+BtnVolta.Text="Volta"
+BtnVolta.Font=Enum.Font.GothamBold
+BtnVolta.TextSize=14
+BtnVolta.TextColor3=Color3.new(1,1,1)
+Instance.new("UICorner",BtnVolta).CornerRadius=UDim.new(0,8)
+
+local BtnIniciar=Instance.new("TextButton",CronoPanel)
+BtnIniciar.Size=UDim2.new(.4,0,0,35)
+BtnIniciar.Position=UDim2.new(.55,0,.75,0)
+BtnIniciar.BackgroundColor3=Color3.fromRGB(100,100,255)
+BtnIniciar.Text="Iniciar"
+BtnIniciar.Font=Enum.Font.GothamBold
+BtnIniciar.TextSize=14
+BtnIniciar.TextColor3=Color3.new(1,1,1)
+Instance.new("UICorner",BtnIniciar).CornerRadius=UDim.new(0,8)
+
+local timerRunning=false
+local timerPaused=false
+local startTime=0
+local pausedTime=0
+
+local function formatTime(t)
+    local min=math.floor(t/60)
+    local sec=math.floor(t%60)
+    local ms=math.floor((t%1)*100)
+    return string.format("%02d : %02d , %02d",min,sec,ms)
+end
+
+R.RenderStepped:Connect(function()
+    if timerRunning and not timerPaused then
+        local elapsed=tick()-startTime
+        TimeDisplay.Text=formatTime(elapsed)
+    end
+end)
+
+BtnIniciar.MouseButton1Click:Connect(function()
+    if not timerRunning then
+        timerRunning=true
+        timerPaused=false
+        startTime=tick()-pausedTime
+        BtnIniciar.Text="Parar"
+        BtnIniciar.BackgroundColor3=Color3.fromRGB(255,50,50)
+    elseif not timerPaused then
+        timerPaused=true
+        pausedTime=tick()-startTime
+        BtnIniciar.Text="Retomar"
+        BtnIniciar.BackgroundColor3=Color3.fromRGB(100,100,255)
+    else
+        timerPaused=false
+        startTime=tick()-pausedTime
+        BtnIniciar.Text="Parar"
+        BtnIniciar.BackgroundColor3=Color3.fromRGB(255,50,50)
+    end
+end)
+
+BtnVolta.MouseButton1Click:Connect(function()
+    timerRunning=false
+    timerPaused=false
+    startTime=0
+    pausedTime=0
+    TimeDisplay.Text="00 : 00 , 00"
+    BtnIniciar.Text="Iniciar"
+    BtnIniciar.BackgroundColor3=Color3.fromRGB(100,100,255)
+end)
+
+CronoCircle.MouseButton1Click:Connect(function()
+    CronoPanel.Visible=not CronoPanel.Visible
+end)
+
+-- PAINEL ANOTAÇÕES
+local NotasPanel=Instance.new("Frame",G)
+NotasPanel.Size=UDim2.new(0,300,0,220)
+NotasPanel.Position=UDim2.new(.35,0,.25,0)
+NotasPanel.BackgroundColor3=Color3.fromRGB(25,25,25)
+NotasPanel.Visible=false
+Instance.new("UICorner",NotasPanel).CornerRadius=UDim.new(0,12)
+
+local dragN=false
+local diN,dsN,spN
+
+NotasPanel.InputBegan:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseButton1 then
+        dragN=true
+        dsN=i.Position
+        spN=NotasPanel.Position
+        i.Changed:Connect(function()
+            if i.UserInputState==Enum.UserInputState.End then
+                dragN=false
+            end
+        end)
+    end
+end)
+
+NotasPanel.InputChanged:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseMovement then
+        diN=i
+    end
+end)
+
+R.RenderStepped:Connect(function()
+    if dragN and diN then
+        local delta=diN.Position-dsN
+        NotasPanel.Position=UDim2.new(spN.X.Scale,spN.X.Offset+delta.X,spN.Y.Scale,spN.Y.Offset+delta.Y)
+    end
+end)
+
+local NotasTitulo=Instance.new("TextLabel",NotasPanel)
+NotasTitulo.Size=UDim2.new(1,0,0,30)
+NotasTitulo.BackgroundTransparency=1
+NotasTitulo.Text="Anotações 🗒"
+NotasTitulo.Font=Enum.Font.GothamBold
+NotasTitulo.TextSize=16
+NotasTitulo.TextColor3=Color3.new(1,1,1)
+
+local pages={}
+local currentPage=1
+
+local NotasBox=Instance.new("TextBox",NotasPanel)
+NotasBox.Size=UDim2.new(.9,0,.7,0)
+NotasBox.Position=UDim2.new(.05,0,.16,0)
+NotasBox.BackgroundColor3=Color3.fromRGB(40,40,40)
+NotasBox.TextColor3=Color3.new(1,1,1)
+NotasBox.Font=Enum.Font.Gotham
+NotasBox.TextSize=14
+NotasBox.TextXAlignment=Enum.TextXAlignment.Left
+NotasBox.TextYAlignment=Enum.TextYAlignment.Top
+NotasBox.ClearTextOnFocus=false
+NotasBox.MultiLine=true
+NotasBox.Text=""
+NotasBox.TextWrapped=true
+Instance.new("UICorner",NotasBox).CornerRadius=UDim.new(0,8)
+
+local BtnPrev=Instance.new("TextButton",NotasPanel)
+BtnPrev.Size=UDim2.new(0,45,0,32)
+BtnPrev.Position=UDim2.new(.05,0,.9,0)
+BtnPrev.BackgroundColor3=Color3.fromRGB(70,130,255)
+BtnPrev.Text="◀️"
+BtnPrev.Font=Enum.Font.GothamBold
+BtnPrev.TextSize=18
+BtnPrev.Visible=false
+Instance.new("UICorner",BtnPrev).CornerRadius=UDim.new(0,8)
+
+local BtnNext=Instance.new("TextButton",NotasPanel)
+BtnNext.Size=UDim2.new(0,45,0,32)
+BtnNext.Position=UDim2.new(.8,0,.9,0)
+BtnNext.BackgroundColor3=Color3.fromRGB(70,130,255)
+BtnNext.Text="▶️"
+BtnNext.Font=Enum.Font.GothamBold
+BtnNext.TextSize=18
+Instance.new("UICorner",BtnNext).CornerRadius=UDim.new(0,8)
+
+local function savePage()
+    pages[currentPage]=NotasBox.Text
+end
+
+local function loadPage(pageNum)
+    savePage()
+    currentPage=pageNum
+    NotasBox.Text=pages[currentPage]or""
+    BtnPrev.Visible=currentPage>1
+end
+
+BtnNext.MouseButton1Click:Connect(function()
+    loadPage(currentPage+1)
+end)
+
+BtnPrev.MouseButton1Click:Connect(function()
+    if currentPage>1 then
+        loadPage(currentPage-1)
+    end
+end)
+
+NotasCircle.MouseButton1Click:Connect(function()
+    NotasPanel.Visible=not NotasPanel.Visible
+end)
+
+-- ============================================
+-- SISTEMA DE QUALIFICAÇÃO AUTOMÁTICA
+-- ============================================
+
+local LINE_LENGTH = 60
+local LINE_WIDTH = 0.5
+local LINE_HEIGHT = 0.3
+local DEBOUNCE_TIME = 2
+
+local startLine = nil
+local linePosition = nil
+local lineNormal = nil
+local lineRightVector = nil
+local lineFolder = nil
+local qualyTimes = {}
+local detectionConnection = nil
+local playersData = {}
+
+-- Painel Qualy
+local QualyPanel=Instance.new("Frame",G)
+QualyPanel.Size=UDim2.new(0,350,0,500)
+QualyPanel.Position=UDim2.new(0.5,-175,0.5,-250)
+QualyPanel.BackgroundColor3=Color3.fromRGB(15,15,15)
+QualyPanel.BorderSizePixel=0
+QualyPanel.Visible=false
+Instance.new("UICorner",QualyPanel).CornerRadius=UDim.new(0,12)
+local qStroke=Instance.new("UIStroke",QualyPanel)
+qStroke.Color=Color3.fromRGB(80,80,200)
+qStroke.Thickness=3
+
+local dragQ=false
+local diQ,dsQ,spQ
+
+QualyPanel.InputBegan:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseButton1 then
+        dragQ=true
+        dsQ=i.Position
+        spQ=QualyPanel.Position
+        i.Changed:Connect(function()
+            if i.UserInputState==Enum.UserInputState.End then
+                dragQ=false
+            end
+        end)
+    end
+end)
+
+QualyPanel.InputChanged:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseMovement then
+        diQ=i
+    end
+end)
+
+R.RenderStepped:Connect(function()
+    if dragQ and diQ then
+        local delta=diQ.Position-dsQ
+        QualyPanel.Position=UDim2.new(spQ.X.Scale,spQ.X.Offset+delta.X,spQ.Y.Scale,spQ.Y.Offset+delta.Y)
+    end
+end)
+
+local qTitle=Instance.new("TextLabel",QualyPanel)
+qTitle.Size=UDim2.new(1,0,0,50)
+qTitle.BackgroundTransparency=1
+qTitle.Text="Qualy Automática 🧠"
+qTitle.TextColor3=Color3.new(1,1,1)
+qTitle.TextSize=24
+qTitle.Font=Enum.Font.GothamBold
+
+local qTimer=Instance.new("TextLabel",QualyPanel)
+qTimer.Size=UDim2.new(1,-20,0,50)
+qTimer.Position=UDim2.new(0,10,0,55)
+qTimer.BackgroundColor3=Color3.fromRGB(25,25,25)
+qTimer.Text="00:00.000"
+qTimer.TextColor3=Color3.fromRGB(100,200,255)
+qTimer.TextSize=24
+qTimer.Font=Enum.Font.GothamBold
+qTimer.TextScaled=true
+Instance.new("UICorner",qTimer).CornerRadius=UDim.new(0,8)
+
+local qResetBtn=Instance.new("TextButton",QualyPanel)
+qResetBtn.Size=UDim2.new(1,-20,0,40)
+qResetBtn.Position=UDim2.new(0,10,0,115)
+qResetBtn.BackgroundColor3=Color3.fromRGB(200,50,50)
+qResetBtn.Text="Resetar Timer"
+qResetBtn.TextColor3=Color3.new(1,1,1)
+qResetBtn.TextSize=16
+qResetBtn.Font=Enum.Font.GothamBold
+qResetBtn.Visible=false
+Instance.new("UICorner",qResetBtn).CornerRadius=UDim.new(0,8)
+
+local qStopBtn=Instance.new("TextButton",QualyPanel)
+qStopBtn.Size=UDim2.new(1,-20,0,40)
+qStopBtn.Position=UDim2.new(0,10,0,115)
+qStopBtn.BackgroundColor3=Color3.fromRGB(50,120,200)
+qStopBtn.Text="Parar Timer"
+qStopBtn.TextColor3=Color3.new(1,1,1)
+qStopBtn.TextSize=16
+qStopBtn.Font=Enum.Font.GothamBold
+qStopBtn.Visible=false
+Instance.new("UICorner",qStopBtn).CornerRadius=UDim.new(0,8)
+
+local qResetPausedBtn=Instance.new("TextButton",QualyPanel)
+qResetPausedBtn.Size=UDim2.new(0.48,0,0,40)
+qResetPausedBtn.Position=UDim2.new(0,10,0,115)
+qResetPausedBtn.BackgroundColor3=Color3.fromRGB(200,50,50)
+qResetPausedBtn.Text="Resetar"
+qResetPausedBtn.TextColor3=Color3.new(1,1,1)
+qResetPausedBtn.TextSize=14
+qResetPausedBtn.Font=Enum.Font.GothamBold
+qResetPausedBtn.Visible=false
+Instance.new("UICorner",qResetPausedBtn).CornerRadius=UDim.new(0,8)
+
+local qContinueBtn=Instance.new("TextButton",QualyPanel)
+qContinueBtn.Size=UDim2.new(0.48,0,0,40)
+qContinueBtn.Position=UDim2.new(0.52,0,0,115)
+qContinueBtn.BackgroundColor3=Color3.fromRGB(50,200,100)
+qContinueBtn.Text="Continuar"
+qContinueBtn.TextColor3=Color3.new(1,1,1)
+qContinueBtn.TextSize=14
+qContinueBtn.Font=Enum.Font.GothamBold
+qContinueBtn.Visible=false
+Instance.new("UICorner",qContinueBtn).CornerRadius=UDim.new(0,8)
+
+local qMarkBtn=Instance.new("TextButton",QualyPanel)
+qMarkBtn.Size=UDim2.new(1,-20,0,45)
+qMarkBtn.Position=UDim2.new(0,10,0,165)
+qMarkBtn.BackgroundColor3=Color3.fromRGB(90,80,200)
+qMarkBtn.Text="Marcar Largada"
+qMarkBtn.TextColor3=Color3.new(1,1,1)
+qMarkBtn.TextSize=18
+qMarkBtn.Font=Enum.Font.GothamBold
+Instance.new("UICorner",qMarkBtn).CornerRadius=UDim.new(0,8)
+
+local qRemoveBtn=Instance.new("TextButton",QualyPanel)
+qRemoveBtn.Size=UDim2.new(1,-20,0,40)
+qRemoveBtn.Position=UDim2.new(0,10,0,220)
+qRemoveBtn.BackgroundColor3=Color3.fromRGB(200,50,50)
+qRemoveBtn.Text="Remover Largada"
+qRemoveBtn.TextColor3=Color3.new(1,1,1)
+qRemoveBtn.TextSize=16
+qRemoveBtn.Font=Enum.Font.GothamBold
+qRemoveBtn.Visible=false
+Instance.new("UICorner",qRemoveBtn).CornerRadius=UDim.new(0,8)
+
+local qScroll=Instance.new("ScrollingFrame",QualyPanel)
+qScroll.Size=UDim2.new(1,-20,1,-275)
+qScroll.Position=UDim2.new(0,10,0,270)
+qScroll.BackgroundColor3=Color3.fromRGB(25,25,25)
+qScroll.BorderSizePixel=0
+qScroll.ScrollBarThickness=6
+Instance.new("UICorner",qScroll).CornerRadius=UDim.new(0,8)
+
+local qList=Instance.new("UIListLayout",qScroll)
+qList.SortOrder=Enum.SortOrder.LayoutOrder
+qList.Padding=UDim.new(0,5)
+
+local function formatQualyTime(seconds)
+    local mins=math.floor(seconds/60)
+    local secs=math.floor(seconds%60)
+    local millis=math.floor((seconds%1)*1000)
+    return string.format("%02d:%02d.%03d",mins,secs,millis)
+end
+
+local function createStartLine(position,lookVector)
+    if lineFolder then lineFolder:Destroy()end
+    
+    lineFolder=Instance.new("Folder")
+    lineFolder.Name="QualyStartLine"
+    lineFolder.Parent=workspace
+    
+    local rayOrigin=position
+    local rayDirection=Vector3.new(0,-50,0)
+    local raycastParams=RaycastParams.new()
+    raycastParams.FilterType=Enum.RaycastFilterType.Exclude
+    raycastParams.FilterDescendantsInstances={L.Character,lineFolder}
+    
+    local rayResult=workspace:Raycast(rayOrigin,rayDirection,raycastParams)
+    local groundY=rayResult and rayResult.Position.Y or position.Y-3
+    
+    local rightVector=Vector3.new(-lookVector.Z,0,lookVector.X).Unit
+    local lineCenter=Vector3.new(position.X,groundY+LINE_HEIGHT/2,position.Z)
+    
+    linePosition=lineCenter
+    lineNormal=lookVector
+    lineRightVector=rightVector
+    
+    local line=Instance.new("Part")
+    line.Name="StartLine"
+    line.Size=Vector3.new(LINE_LENGTH,LINE_HEIGHT,LINE_WIDTH)
+    line.Position=lineCenter
+    line.CFrame=CFrame.new(lineCenter,lineCenter+rightVector)*CFrame.Angles(0,math.rad(90),0)
+    line.Anchored=true
+    line.CanCollide=false
+    line.Material=Enum.Material.Neon
+    line.BrickColor=BrickColor.new("Lime green")
+    line.Transparency=0.2
+    line.Parent=lineFolder
+    
+    local light=Instance.new("PointLight",line)
+    light.Color=Color3.fromRGB(0,255,0)
+    light.Brightness=3
+    light.Range=30
+    
+    for i=-1,1,2 do
+        local marker=Instance.new("Part")
+        marker.Size=Vector3.new(2,4,2)
+        marker.Position=lineCenter+(rightVector*(LINE_LENGTH/2)*i)
+        marker.Anchored=true
+        marker.CanCollide=false
+        marker.Material=Enum.Material.Neon
+        marker.BrickColor=BrickColor.new("Really red")
+        marker.Transparency=0.3
+        marker.Parent=lineFolder
+        
+        local markerLight=Instance.new("PointLight",marker)
+        markerLight.Color=Color3.fromRGB(255,0,0)
+        markerLight.Brightness=2
+        markerLight.Range=15
+    end
+    
+    for i=0,LINE_LENGTH,5 do
+        local gridLine=Instance.new("Part")
+        gridLine.Size=Vector3.new(0.2,LINE_HEIGHT+0.3,LINE_WIDTH+0.3)
+        gridLine.Position=lineCenter-(rightVector*LINE_LENGTH/2)+(rightVector*i)
+        gridLine.CFrame=CFrame.new(gridLine.Position,gridLine.Position+rightVector)
+        gridLine.Anchored=true
+        gridLine.CanCollide=false
+        gridLine.Material=Enum.Material.Neon
+        gridLine.BrickColor=BrickColor.new("White")
+        gridLine.Transparency=0.4
+        gridLine.Parent=lineFolder
+    end
+    
+    return line
+end
+
+local function isPlayerInVehicle(targetPlayer)
+    if not targetPlayer.Character then return false end
+    local humanoid=targetPlayer.Character:FindFirstChild("Humanoid")
+    if not humanoid then return false end
+    if humanoid.SeatPart and humanoid.SeatPart:IsA("VehicleSeat")then return true end
+    return false
+end
+
+local function getVehiclePosition(targetPlayer)
+    if not targetPlayer.Character then return nil end
+    if not isPlayerInVehicle(targetPlayer)then return nil end
+    local humanoid=targetPlayer.Character:FindFirstChild("Humanoid")
+    if humanoid and humanoid.SeatPart then
+        local vehicle=humanoid.SeatPart.Parent
+        if vehicle then
+            if vehicle.PrimaryPart then return vehicle.PrimaryPart.Position end
+            return humanoid.SeatPart.Position
+        end
+    end
+    return nil
+end
+
+local function isWithinLineBounds(vehiclePos)
+    if not linePosition or not lineRightVector or not lineNormal then return false end
+    local toVehicle=vehiclePos-linePosition
+    local lateralDistance=math.abs(toVehicle:Dot(lineRightVector))
+    local frontalDistance=math.abs(toVehicle:Dot(lineNormal))
+    local isWithinWidth=lateralDistance<=(LINE_LENGTH/2)+2
+    local isNearLine=frontalDistance<=3
+    return isWithinWidth and isNearLine
+end
+
+local function isInFrontOfLine(vehiclePos)
+    if not linePosition or not lineNormal then return nil end
+    local toVehicle=vehiclePos-linePosition
+    local dotProduct=toVehicle:Dot(lineNormal)
+    return dotProduct>0
+end
+
+local globalTimerRunning=false
+local globalStartTime=0
+local globalPausedTime=0
+local globalTimerPaused=false
+local currentTrackedPlayer=nil
+
+local function resetQualyTimer()
+    globalTimerRunning=false
+    globalStartTime=0
+    globalPausedTime=0
+    globalTimerPaused=false
+    currentTrackedPlayer=nil
+    
+    for _,plr in pairs(P:GetPlayers())do
+        if playersData[plr.UserId]then
+            playersData[plr.UserId].isQualifying=false
+            playersData[plr.UserId].lapCount=0
+            playersData[plr.UserId].startTime=0
+            playersData[plr.UserId].wasInFront=nil
+            playersData[plr.UserId].lastDetectionTime=0
+        end
+    end
+    
+    qTimer.Text="00:00.000"
+    qTimer.TextColor3=Color3.fromRGB(100,200,255)
+    qResetBtn.Visible=false
+    qStopBtn.Visible=false
+    qResetPausedBtn.Visible=false
+    qContinueBtn.Visible=false
+    qMarkBtn.Position=UDim2.new(0,10,0,165)
+    qRemoveBtn.Position=UDim2.new(0,10,0,220)
+    qScroll.Position=UDim2.new(0,10,0,270)
+end
+
+local function initPlayerData(targetPlayer)
+    if not playersData[targetPlayer.UserId]then
+        playersData[targetPlayer.UserId]={
+            player=targetPlayer,
+            isQualifying=false,
+            lapCount=0,
+            startTime=0,
+            wasInFront=nil,
+            lastDetectionTime=0
+        }
+    end
+end
+
+local function removeTime(index)
+    table.remove(qualyTimes,index)
+    updateTimesList()
+end
+
+function updateTimesList()
+    table.sort(qualyTimes,function(a,b)return a.time<b.time end)
+    
+    for _,child in ipairs(qScroll:GetChildren())do
+        if child:IsA("Frame")then child:Destroy()end
+    end
+    
+    for i,data in ipairs(qualyTimes)do
+        local timeFrame=Instance.new("Frame",qScroll)
+        timeFrame.Size=UDim2.new(1,-10,0,30)
+        timeFrame.BackgroundColor3=Color3.fromRGB(35,35,35)
+        timeFrame.BorderSizePixel=0
+        timeFrame.LayoutOrder=i
+        Instance.new("UICorner",timeFrame).CornerRadius=UDim.new(0,6)
+        
+        local nameLabel=Instance.new("TextLabel",timeFrame)
+        nameLabel.Size=UDim2.new(0.35,0,1,0)
+        nameLabel.Position=UDim2.new(0,5,0,0)
+        nameLabel.BackgroundTransparency=1
+        nameLabel.Text="P"..i.." - "..data.name
+        nameLabel.TextColor3=Color3.new(1,1,1)
+        nameLabel.TextSize=12
+        nameLabel.Font=Enum.Font.GothamBold
+        nameLabel.TextXAlignment=Enum.TextXAlignment.Left
+        nameLabel.TextScaled=true
+        
+        local removeBtn=Instance.new("TextButton",timeFrame)
+        removeBtn.Size=UDim2.new(0,55,0,20)
+        removeBtn.Position=UDim2.new(0.5,-27.5,0.5,-10)
+        removeBtn.BackgroundColor3=Color3.fromRGB(200,50,50)
+        removeBtn.Text="Remover"
+        removeBtn.TextColor3=Color3.new(1,1,1)
+        removeBtn.TextSize=10
+        removeBtn.Font=Enum.Font.GothamBold
+        Instance.new("UICorner",removeBtn).CornerRadius=UDim.new(0,4)
+        
+        local currentIndex=i
+        removeBtn.MouseButton1Click:Connect(function()removeTime(currentIndex)end)
+        
+        local timeText=Instance.new("TextLabel",timeFrame)
+        timeText.Size=UDim2.new(0.35,0,1,0)
+        timeText.Position=UDim2.new(0.65,0,0,0)
+        timeText.BackgroundTransparency=1
+        timeText.Text=formatQualyTime(data.time)
+        timeText.TextColor3=Color3.fromRGB(100,200,255)
+        timeText.TextSize=12
+        timeText.Font=Enum.Font.GothamBold
+        timeText.TextXAlignment=Enum.TextXAlignment.Right
+    end
+    
+    qScroll.CanvasSize=UDim2.new(0,0,0,#qualyTimes*35)
+end
+
+function addTimeToList(playerName,time)
+    table.insert(qualyTimes,{name=playerName,time=time})
+    updateTimesList()
+end
+
+local function checkLineCrossing()
+    if not linePosition or not lineNormal or not lineRightVector then return end
+    local currentTime=tick()
+    
+    for _,targetPlayer in pairs(P:GetPlayers())do
+        if not isPlayerInVehicle(targetPlayer)then continue end
+        local vehiclePos=getVehiclePosition(targetPlayer)
+        if not vehiclePos then continue end
+        if not isWithinLineBounds(vehiclePos)then continue end
+        
+        initPlayerData(targetPlayer)
+        local data=playersData[targetPlayer.UserId]
+        local currentlyInFront=isInFrontOfLine(vehiclePos)
+        
+        if currentTime-data.lastDetectionTime<DEBOUNCE_TIME then
+            data.wasInFront=currentlyInFront
+            continue
+        end
+        
+        if data.wasInFront~=nil and data.wasInFront~=currentlyInFront then
+            data.lastDetectionTime=currentTime
+            
+            if not data.isQualifying then
+                data.isQualifying=true
+                data.lapCount=0
+                qTimer.Text="🏁 "..targetPlayer.Name.." - Aquecimento"
+                qTimer.TextColor3=Color3.fromRGB(255,200,100)
+                globalTimerRunning=false
+                currentTrackedPlayer=targetPlayer
+            elseif data.lapCount==0 then
+                data.lapCount=1
+                data.startTime=tick()
+                globalTimerRunning=true
+                globalStartTime=tick()
+                globalTimerPaused=false
+                currentTrackedPlayer=targetPlayer
+                qTimer.Text="⏱️ "..targetPlayer.Name.." - 00:00.000"
+                qTimer.TextColor3=Color3.fromRGB(100,255,100)
+                qResetBtn.Visible=false
+                qStopBtn.Visible=true
+                qResetPausedBtn.Visible=false
+                qContinueBtn.Visible=false
+                qMarkBtn.Position=UDim2.new(0,10,0,165)
+                qRemoveBtn.Position=UDim2.new(0,10,0,220)
+                qScroll.Position=UDim2.new(0,10,0,270)
+            elseif data.lapCount==1 then
+                local finalTime=tick()-data.startTime
+                globalTimerRunning=false
+                qTimer.Text="🏁 "..targetPlayer.Name.." - "..formatQualyTime(finalTime)
+                qTimer.TextColor3=Color3.fromRGB(100,200,255)
+                qStopBtn.Visible=false
+                addTimeToList(targetPlayer.Name,finalTime)
+                task.wait(2)
+                data.isQualifying=false
+                data.lapCount=0
+                data.startTime=0
+                data.wasInFront=nil
+                data.lastDetectionTime=0
+            end
+        end
+        data.wasInFront=currentlyInFront
+    end
+end
+
+local function updateQualyTimer()
+    if globalTimerRunning and globalStartTime>0 and not globalTimerPaused then
+        local currentTime=tick()-globalStartTime
+        qTimer.Text=formatQualyTime(currentTime)
+    end
+    if currentTrackedPlayer and playersData[currentTrackedPlayer.UserId]then
+        local data=playersData[currentTrackedPlayer.UserId]
+        if data.isQualifying and data.lapCount>=1 and data.startTime>0 and not globalTimerPaused then
+            local currentTime=tick()-data.startTime
+            qTimer.Text=formatQualyTime(currentTime)
+        end
+    end
+end
+
+qMarkBtn.MouseButton1Click:Connect(function()
+    if L.Character then
+        local hrp=L.Character:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            local position=hrp.Position
+            local lookVector=hrp.CFrame.LookVector
+            startLine=createStartLine(position,lookVector)
+            resetQualyTimer()
+            for _,targetPlayer in pairs(P:GetPlayers())do
+                if isPlayerInVehicle(targetPlayer)then
+                    initPlayerData(targetPlayer)
+                    local vehiclePos=getVehiclePosition(targetPlayer)
+                    if vehiclePos then
+                        playersData[targetPlayer.UserId].wasInFront=isInFrontOfLine(vehiclePos)
+                    end
+                end
+            end
+            qMarkBtn.Text="Largada Marcada! ✓"
+            qMarkBtn.BackgroundColor3=Color3.fromRGB(100,200,100)
+            qRemoveBtn.Visible=true
+            task.wait(1.5)
+            qMarkBtn.Text="Remarcar Largada"
+            qMarkBtn.BackgroundColor3=Color3.fromRGB(90,80,200)
+            if not detectionConnection then
+                detectionConnection=R.Heartbeat:Connect(checkLineCrossing)
+            end
+        end
+    end
+end)
+
+qRemoveBtn.MouseButton1Click:Connect(function()
+    if lineFolder then
+        lineFolder:Destroy()
+        lineFolder=nil
+        linePosition=nil
+        lineNormal=nil
+        lineRightVector=nil
+    end
+    if detectionConnection then
+        detectionConnection:Disconnect()
+        detectionConnection=nil
+    end
+    resetQualyTimer()
+    qRemoveBtn.Visible=false
+    qMarkBtn.Text="Marcar Largada"
+    qMarkBtn.BackgroundColor3=Color3.fromRGB(90,80,200)
+end)
+
+qStopBtn.MouseButton1Click:Connect(function()
+    globalTimerPaused=true
+    globalPausedTime=tick()-globalStartTime
+    qStopBtn.Visible=false
+    qResetPausedBtn.Visible=true
+    qContinueBtn.Visible=true
+    qTimer.TextColor3=Color3.fromRGB(255,200,100)
+end)
+
+qResetPausedBtn.MouseButton1Click:Connect(function()
+    resetQualyTimer()
+end)
+
+qContinueBtn.MouseButton1Click:Connect(function()
+    globalTimerPaused=false
+    globalStartTime=tick()-globalPausedTime
+    qResetPausedBtn.Visible=false
+    qContinueBtn.Visible=false
+    qStopBtn.Visible=true
+    qTimer.TextColor3=Color3.fromRGB(100,255,100)
+end)
+
+qResetBtn.MouseButton1Click:Connect(function()
+    resetQualyTimer()
+end)
+
+R.RenderStepped:Connect(updateQualyTimer)
+
+P.PlayerRemoving:Connect(function(removedPlayer)
+    if playersData[removedPlayer.UserId]then
+        playersData[removedPlayer.UserId]=nil
+    end
+end)
+
+QualyCircle.MouseButton1Click:Connect(function()
+    QualyPanel.Visible=not QualyPanel.Visible
+end)
+
+-- ============================================
+-- FIM SISTEMA QUALY
+-- ============================================
+
+task.spawn(function()
+    while task.wait(.1)do
+        CronoCircle.Visible=cronoActive
+        NotasCircle.Visible=notasActive
+        QualyCircle.Visible=qualyActive
+    end
+end)
+
+local MZ=Instance.new("TextButton",G)
+MZ.Size=UDim2.new(0,50,0,50)
+MZ.Position=UDim2.new(.95,-50,.65,0)
+MZ.BackgroundColor3=Color3.fromRGB(20,20,20)
+MZ.TextColor3=Color3.new(1,1,1)
+MZ.Text="📋"
+MZ.Font=Enum.Font.GothamBold 
+MZ.TextSize=28
+Instance.new("UICorner",MZ).CornerRadius=UDim.new(1,0)
+
+local dragMZ=false
+local diMZ,dsMZ,spMZ
+
+MZ.InputBegan:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseButton1 then
+        dragMZ=true
+        dsMZ=i.Position
+        spMZ=MZ.Position
+        i.Changed:Connect(function()
+            if i.UserInputState==Enum.UserInputState.End then
+                dragMZ=false
+            end
+        end)
+    end
+end)
+
+MZ.InputChanged:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseMovement then
+        diMZ=i
+    end
+end)
+
+R.RenderStepped:Connect(function()
+    if dragMZ and diMZ then
+        local delta=diMZ.Position-dsMZ
+        MZ.Position=UDim2.new(spMZ.X.Scale,spMZ.X.Offset+delta.X,spMZ.Y.Scale,spMZ.Y.Offset+delta.Y)
+    end
+end)
+
+local mi=false 
+MZ.MouseButton1Click:Connect(function()
+    mi=not mi 
+    F.Visible=not mi 
+end)
+
+local A=Instance.new("Folder",G)
+
+local function a(n,v)
+    local t=Instance.new("TextLabel",A)
+    t.Size=UDim2.new(.35,0,0,25)
+    local i=#A:GetChildren()+1 
+    t.Position=UDim2.new(.325,0,.05+(i-1)*.035,0)
+    t.BackgroundColor3=Color3.fromRGB(200,50,50)
+    t.TextColor3=Color3.new(1,1,1)
+    t.TextScaled=true 
+    t.Text="⚠️ "..n.." passou do limite! ("..v..")"
+    t.Font=Enum.Font.GothamBold 
+    t.ZIndex=5 
+    Instance.new("UICorner",t).CornerRadius=UDim.new(0,6)
+    task.delay(2,function()
+        for i=1,20 do 
+            task.wait(.025)
+            t.BackgroundTransparency=i/20 
+            t.TextTransparency=i/20 
+        end 
+        t:Destroy()
+    end)
+end
+
+local function c(ch,p)
+    if not e then return end 
+    local h=ch:WaitForChild("HumanoidRootPart",3)
+    if not h then return end 
+
+    local b=Instance.new("BillboardGui",ch)
+    b.Size=UDim2.new(4,0,2,0)
+    b.StudsOffset=Vector3.new(0,4,0)
+    b.AlwaysOnTop=true 
+
+    local l=Instance.new("TextLabel",b)
+    l.Size=UDim2.new(1,0,1,0)
+    l.BackgroundTransparency=1 
+    l.TextColor3=Color3.new(1,1,1)
+    l.TextStrokeTransparency=.3 
+    l.Font=Enum.Font.GothamBold 
+    l.TextSize=20 
+    l.RichText=true
+
+    d[p]={b=b,a=false}
+    d[p].c=R.Heartbeat:Connect(function()
+        if not e then return end 
+        local sv=g(ch)
+        local v=sv and sv.Value or 0
+        
+        local velText
+        if v>100 then
+            velText='<font color="rgb(255,255,255)">Vel: </font><font color="rgb(255,50,50)">'..v..' ⚠️</font>'
+        else
+            velText='<font color="rgb(255,255,255)">Vel: </font><font color="rgb(50,255,50)">'..v..'</font>'
+        end
+        
+        l.Text=p.Name.."\n"..velText
+        
+        if m>0 and v>m then 
+            if not d[p].a then 
+                a(p.Name,v)
+                d[p].a=true 
+                task.delay(2,function()
+                    d[p].a=false 
+                end)
+            end 
+        end
+    end)
+end 
+
+local function r(p)
+    if d[p]then 
+        if d[p].c then d[p].c:Disconnect()end 
+        if d[p].b then d[p].b:Destroy()end 
+        d[p]=nil 
+    end 
+end 
+
+local function on()
+    e=true 
+    B.Text="Desativar"
+    B.BackgroundColor3=Color3.fromRGB(200,50,50)
+    for _,p in ipairs(P:GetPlayers())do 
+        if p.Character then 
+            c(p.Character,p)
+        end 
+        p.CharacterAdded:Connect(function(ch)
+            task.wait(1)
+            c(ch,p)
+        end)
+    end 
+end 
+
+local function off()
+    e=false 
+    B.Text="Ativar"
+    B.BackgroundColor3=Color3.fromRGB(50,200,100)
+    for p in pairs(d)do 
+        r(p)
+    end 
+end 
+
+B.MouseButton1Click:Connect(function()
+    if e then 
+        off()
+    else 
+        on()
+    end 
+end)
+
+S.FocusLost:Connect(function()
+    local v=tonumber(S.Text)
+    if v then 
+        m=v 
+        S.Text="Limite: "..v 
+    else 
+        m=0 
+        S.Text=""
+    end 
+end)
+
+print("✅ Painel Kart com Qualy Automática Carregado!")
+print("✅ Sistema de Qualificação Automática integrado com sucesso!")
