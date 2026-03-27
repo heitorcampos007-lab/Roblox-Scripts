@@ -1,0 +1,966 @@
+--========================================================--
+-- F1 LAP TIMER - COM MARCAR/REMOVER LARGADA INTEGRADO
+--========================================================--
+
+local Players = game:GetService("Players")
+local Run = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local player = Players.LocalPlayer
+
+local gui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+gui.Name = "F1"
+gui.ResetOnSpawn = false
+
+--========================================================--
+-- LINHA DE CHEGADA (FIXA)
+--========================================================--
+local P1 = Vector3.new(312.2, 3, -32.5)
+local P2 = Vector3.new(312.2, 3, -94.1)
+local CENTER = (P1 + P2) / 2
+local LENGTH = (P1 - P2).Magnitude
+local WIDTH = 6
+
+local finish = Instance.new("Part")
+finish.Size = Vector3.new(0.5, 0.2, LENGTH)
+finish.Position = CENTER
+finish.Anchored = true
+finish.CanCollide = false
+finish.Color = Color3.fromRGB(255,255,255)
+finish.Transparency = 0.4
+finish.CFrame = CFrame.lookAt(CENTER, CENTER + (P2-P1).Unit)
+finish.Parent = workspace
+
+local function inside(root)
+	local pos = root.Position
+	local AP = pos - P1
+	local AB = (P2 - P1)
+	local len = AB.Magnitude
+	local ABn = AB.Unit
+	local proj = AP:Dot(ABn)
+	if proj < 0 or proj > len then return false end
+	local closest = P1 + ABn * proj
+	return (pos - closest).Magnitude < WIDTH
+end
+
+local function isInVehicle(plr)
+	local char = plr.Character
+	if not char then return false end
+	local hum = char:FindFirstChildWhichIsA("Humanoid")
+	if not hum then return false end
+	return hum.SeatPart ~= nil and hum.SeatPart:IsA("VehicleSeat")
+end
+
+--========================================================--
+-- FORMATOS DE TEMPO
+--========================================================--
+local function fmtDynamic(t)
+	if not t then return "--.---" end
+	local mins = math.floor(t / 60)
+	local secs = math.floor(t % 60)
+	local ms = math.floor((t % 1) * 1000)
+	if mins > 0 then
+		return string.format("%02d:%02d.%03d", mins, secs, ms)
+	else
+		return string.format("%.3f", t)
+	end
+end
+
+local function fmtDiff(diff)
+	if not diff or math.abs(diff) > 10000 then return "+--.---" end
+	if math.abs(diff) < 0.001 then return "0.000" end
+	local absDiff = math.abs(diff)
+	local formattedTime = string.format("%.3f", absDiff)
+	if diff > 0 then return "+" .. formattedTime
+	elseif diff < 0 then return formattedTime
+	else return "0.000" end
+end
+
+--========================================================--
+-- LEADERBOARD
+--========================================================--
+local board = Instance.new("Frame", gui)
+board.Size = UDim2.new(0, 90, 0, 350)
+board.Position = UDim2.new(0, 5, 0.01, 5)
+board.BackgroundTransparency = 1
+
+local img = Instance.new("ImageLabel", board)
+img.Size = UDim2.new(1,0,1,0)
+img.BackgroundTransparency = 1
+img.Image = "rbxassetid://102236407825083"
+img.ScaleType = Enum.ScaleType.Fit
+
+local textArea = Instance.new("Frame", board)
+textArea.Size = UDim2.new(1,0,1,0)
+textArea.BackgroundTransparency = 1
+
+local rowPositions = {
+	36.5, 53.1, 69.2, 85.8, 100.4, 116.5, 132.1, 147.7, 163.3, 178.9,
+	194.0, 210.1, 225.7, 242.8, 257.4, 272.0, 289.1, 305.2, 320.3, 335.4
+}
+
+local horizontalOffset = 0.17
+local rows = {}
+
+for i = 1, 20 do
+	local row = Instance.new("Frame", textArea)
+	row.Size = UDim2.new(0.85, 0, 0, 17)
+	row.Position = UDim2.new(horizontalOffset, 0, 0, rowPositions[i])
+	row.BackgroundTransparency = 1
+	row.Name = "Row"..i
+
+	local name = Instance.new("TextLabel", row)
+	name.Size = UDim2.new(0.25,0,1,0)
+	name.BackgroundTransparency = 1
+	name.TextColor3 = Color3.fromRGB(255,255,255)
+	name.Font = Enum.Font.GothamBold
+	name.TextScaled = true
+	name.TextXAlignment = Enum.TextXAlignment.Left
+
+	local soft = Instance.new("TextLabel", row)
+	soft.Size = UDim2.new(0.05, 0, 1, 0)
+	soft.Position = UDim2.new(0.25, 0, 0, 0)
+	soft.BackgroundTransparency = 1
+	soft.TextColor3 = Color3.fromRGB(255, 0, 0)
+	soft.Font = Enum.Font.GothamBold
+	soft.TextScaled = true
+	soft.Text = "S"
+	soft.TextXAlignment = Enum.TextXAlignment.Left
+
+	local time = Instance.new("TextLabel", row)
+	time.Position = UDim2.new(0.40, 0, 0, 0)
+	time.Size = UDim2.new(0.50, 0, 1, 0)
+	time.BackgroundTransparency = 1
+	time.TextColor3 = Color3.fromRGB(255,255,255)
+	time.Font = Enum.Font.GothamBold
+	time.TextScaled = true
+	time.TextXAlignment = Enum.TextXAlignment.Left
+
+	rows[i] = {name = name, soft = soft, time = time}
+end
+
+--========================================================--
+-- AVISO FASTEST LAP
+--========================================================--
+local announce = Instance.new("ImageLabel", gui)
+announce.Size = UDim2.new(0, 828/2.3, 0, 94/2.3)
+announce.Position = UDim2.new(0.5, -828/4.6, 0.05, 0)
+announce.BackgroundTransparency = 1
+announce.Image = "rbxassetid://75270611905159"
+announce.Visible = false
+announce.ZIndex = 10
+announce.ImageTransparency = 1
+
+local txtName = Instance.new("TextLabel", announce)
+txtName.Size = UDim2.new(1, 0, 1, 0)
+txtName.BackgroundTransparency = 1
+txtName.TextColor3 = Color3.fromRGB(255,255,255)
+txtName.Font = Enum.Font.GothamBlack
+txtName.TextScaled = true
+txtName.ZIndex = 11
+txtName.TextTransparency = 1
+
+local txtTime = Instance.new("TextLabel", announce)
+txtTime.Size = UDim2.new(1, -20, 1, 0)
+txtTime.Position = UDim2.new(0, 0, 0, 0)
+txtTime.BackgroundTransparency = 1
+txtTime.TextColor3 = Color3.fromRGB(128, 0, 255)
+txtTime.Font = Enum.Font.GothamBlack
+txtTime.TextScaled = true
+txtTime.TextXAlignment = Enum.TextXAlignment.Right
+txtTime.ZIndex = 11
+txtTime.TextTransparency = 1
+
+local function showFastLap(tag, time)
+	task.delay(2, function()
+		txtName.Text = tag
+		txtTime.Text = fmtDynamic(time)
+		announce.Visible = true
+		TweenService:Create(announce, TweenInfo.new(0.6), {ImageTransparency = 0}):Play()
+		TweenService:Create(txtName, TweenInfo.new(0.6), {TextTransparency = 0}):Play()
+		TweenService:Create(txtTime, TweenInfo.new(0.6), {TextTransparency = 0}):Play()
+		task.delay(5, function()
+			local t = TweenInfo.new(0.6)
+			TweenService:Create(announce, t, {ImageTransparency = 1}):Play()
+			TweenService:Create(txtName, t, {TextTransparency = 1}):Play()
+			TweenService:Create(txtTime, t, {TextTransparency = 1}):Play()
+			task.wait(0.6)
+			announce.Visible = false
+		end)
+	end)
+end
+
+--========================================================--
+-- LOGICA PRINCIPAL DE VOLTAS
+--========================================================--
+local bestLap = {}
+local wasInside = {}
+local dataP = {}
+local DELAY = 2
+local record = math.huge
+
+local function getPlayerTag(playerObject)
+	local nameToUse = playerObject.DisplayName or playerObject.Name
+	return string.upper(string.sub(nameToUse, 1, 3))
+end
+
+local function updateBoard()
+	local arr = {}
+	for _, plr in ipairs(Players:GetPlayers()) do
+		local bestTime = bestLap[plr.Name]
+		table.insert(arr, {n = plr, t = bestTime, sortTime = bestTime or math.huge})
+	end
+	table.sort(arr, function(a,b) return a.sortTime < b.sortTime end)
+	record = arr[1] and arr[1].t or math.huge
+	for i = 1,20 do
+		if arr[i] then
+			local pl = arr[i]
+			rows[i].name.Text = getPlayerTag(pl.n)
+			rows[i].soft.Text = "S"
+			if pl.t then
+				local diff = pl.t - record
+				if math.abs(diff) < 0.001 then
+					rows[i].time.Text = fmtDynamic(pl.t)
+					rows[i].time.TextColor3 = Color3.fromRGB(128,0,128)
+				else
+					rows[i].time.Text = fmtDiff(diff)
+					rows[i].time.TextColor3 = Color3.fromRGB(255,255,255)
+				end
+			else
+				rows[i].time.Text = "NO TIME"
+				rows[i].time.TextColor3 = Color3.fromRGB(255,255,255)
+			end
+		else
+			rows[i].name.Text = ""
+			rows[i].soft.Text = ""
+			rows[i].time.Text = ""
+		end
+	end
+end
+
+Run.Heartbeat:Connect(function()
+	for _, plr in ipairs(Players:GetPlayers()) do
+		local char = plr.Character
+		if not char then continue end
+		local root = char:FindFirstChild("HumanoidRootPart")
+		if not root then continue end
+		if not isInVehicle(plr) then
+			wasInside[plr] = false
+			continue
+		end
+		wasInside[plr] = wasInside[plr] or false
+		dataP[plr] = dataP[plr] or {active=false, start=0, cool=false}
+		local now = inside(root)
+		local crossed = now and not wasInside[plr]
+		wasInside[plr] = now
+		local d = dataP[plr]
+		if crossed then
+			if d.cool then continue end
+			if d.active then
+				local lap = tick() - d.start
+				if not bestLap[plr.Name] or lap < bestLap[plr.Name] then
+					bestLap[plr.Name] = lap
+					if lap < record then
+						record = lap
+						showFastLap(getPlayerTag(plr), lap)
+					end
+					updateBoard()
+				end
+				d.cool = true
+				d.active = false
+				task.delay(DELAY, function()
+					d.cool = false
+					d.active = true
+					d.start = tick()
+				end)
+			else
+				task.delay(DELAY, function()
+					if not d.cool then
+						d.active = true
+						d.start = tick()
+					end
+				end)
+			end
+		end
+	end
+	updateBoard()
+end)
+
+Players.PlayerAdded:Connect(updateBoard)
+Players.PlayerRemoving:Connect(updateBoard)
+
+--========================================================--
+-- BOTAO RESET
+--========================================================--
+local resetButton = Instance.new("TextButton", gui)
+resetButton.Size = UDim2.new(0, 25, 0, 25)
+resetButton.Position = UDim2.new(0, 100, 0.01, 5)
+resetButton.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+resetButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+resetButton.Font = Enum.Font.GothamBold
+resetButton.TextScaled = true
+resetButton.Text = "R"
+
+resetButton.MouseButton1Click:Connect(function()
+	bestLap = {}
+	record = math.huge
+	updateBoard()
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if dataP[plr] then
+			dataP[plr].active = false
+			dataP[plr].cool = true
+			task.delay(DELAY, function()
+				if dataP[plr] then
+					dataP[plr].cool = false
+					dataP[plr].active = false
+				end
+			end)
+		end
+	end
+end)
+
+--========================================================--
+-- PAINEL MARCAR / REMOVER LARGADA + VELOCIDADE
+-- Estados: "expanded" | "minimized" | "bubble"
+--========================================================--
+local LINE_LENGTH   = 60
+local LINE_WIDTH_3D = 0.5
+local LINE_HEIGHT   = 0.3
+local DEBOUNCE_TIME = 2
+
+local startLineFolder   = nil
+local startLinePosition = nil
+local startLineNormal   = nil
+local startLineRight    = nil
+local startLineActive   = false
+
+local PANEL_W = 210
+local PANEL_H = 210
+local MINI_H  = 28  -- altura da barra minimizada
+
+-- Estado atual do painel
+local panelState = "expanded" -- "expanded" | "minimized" | "bubble"
+local animating = false
+
+--========================================================--
+-- PAINEL PRINCIPAL
+--========================================================--
+local startPanel = Instance.new("Frame", gui)
+startPanel.Size = UDim2.new(0, PANEL_W, 0, PANEL_H)
+startPanel.Position = UDim2.new(0, 130, 0.01, 5)
+startPanel.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+startPanel.BorderSizePixel = 0
+startPanel.ClipsDescendants = true
+Instance.new("UICorner", startPanel).CornerRadius = UDim.new(0, 10)
+local spStroke = Instance.new("UIStroke", startPanel)
+spStroke.Color = Color3.fromRGB(90, 80, 200)
+spStroke.Thickness = 2
+
+-- Barra do topo (título + botões - e X)
+local topBar = Instance.new("Frame", startPanel)
+topBar.Size = UDim2.new(1, 0, 0, 28)
+topBar.BackgroundTransparency = 1
+
+local spTitle = Instance.new("TextLabel", topBar)
+spTitle.Size = UDim2.new(1, -60, 1, 0)
+spTitle.Position = UDim2.new(0, 8, 0, 0)
+spTitle.BackgroundTransparency = 1
+spTitle.Text = "Painel"
+spTitle.Font = Enum.Font.GothamBold
+spTitle.TextSize = 13
+spTitle.TextColor3 = Color3.new(1, 1, 1)
+spTitle.TextXAlignment = Enum.TextXAlignment.Left
+
+-- Botão minimizar ( - )
+local minBtn = Instance.new("TextButton", topBar)
+minBtn.Size = UDim2.new(0, 22, 0, 22)
+minBtn.Position = UDim2.new(1, -50, 0.5, -11)
+minBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+minBtn.TextColor3 = Color3.new(1, 1, 1)
+minBtn.Text = "−"
+minBtn.Font = Enum.Font.GothamBold
+minBtn.TextSize = 16
+Instance.new("UICorner", minBtn).CornerRadius = UDim.new(1, 0)
+
+-- Botão fechar/bolinha ( X )
+local closeBtn = Instance.new("TextButton", topBar)
+closeBtn.Size = UDim2.new(0, 22, 0, 22)
+closeBtn.Position = UDim2.new(1, -24, 0.5, -11)
+closeBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+closeBtn.TextColor3 = Color3.new(1, 1, 1)
+closeBtn.Text = "✕"
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.TextSize = 12
+Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(1, 0)
+
+-- Conteúdo do painel (tudo abaixo da topBar)
+local panelContent = Instance.new("Frame", startPanel)
+panelContent.Size = UDim2.new(1, 0, 1, -28)
+panelContent.Position = UDim2.new(0, 0, 0, 28)
+panelContent.BackgroundTransparency = 1
+
+local markBtn = Instance.new("TextButton", panelContent)
+markBtn.Size = UDim2.new(0.9, 0, 0, 32)
+markBtn.Position = UDim2.new(0.05, 0, 0, 4)
+markBtn.BackgroundColor3 = Color3.fromRGB(90, 80, 200)
+markBtn.TextColor3 = Color3.new(1, 1, 1)
+markBtn.Text = "Marcar Largada"
+markBtn.Font = Enum.Font.GothamBold
+markBtn.TextSize = 13
+Instance.new("UICorner", markBtn).CornerRadius = UDim.new(0, 7)
+
+local removeBtn = Instance.new("TextButton", panelContent)
+removeBtn.Size = UDim2.new(0.9, 0, 0, 28)
+removeBtn.Position = UDim2.new(0.05, 0, 0, 42)
+removeBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+removeBtn.TextColor3 = Color3.new(1, 1, 1)
+removeBtn.Text = "Remover Largada"
+removeBtn.Font = Enum.Font.GothamBold
+removeBtn.TextSize = 12
+removeBtn.Visible = false
+Instance.new("UICorner", removeBtn).CornerRadius = UDim.new(0, 7)
+
+local sep = Instance.new("Frame", panelContent)
+sep.Size = UDim2.new(0.9, 0, 0, 1)
+sep.Position = UDim2.new(0.05, 0, 0, 78)
+sep.BackgroundColor3 = Color3.fromRGB(90, 80, 200)
+sep.BorderSizePixel = 0
+
+local velLabel = Instance.new("TextLabel", panelContent)
+velLabel.Size = UDim2.new(1, 0, 0, 20)
+velLabel.Position = UDim2.new(0, 0, 0, 84)
+velLabel.BackgroundTransparency = 1
+velLabel.Text = "Velocidade"
+velLabel.Font = Enum.Font.GothamBold
+velLabel.TextSize = 13
+velLabel.TextColor3 = Color3.new(1, 1, 1)
+
+local velLimitBox = Instance.new("TextBox", panelContent)
+velLimitBox.Size = UDim2.new(0.9, 0, 0, 26)
+velLimitBox.Position = UDim2.new(0.05, 0, 0, 107)
+velLimitBox.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+velLimitBox.TextColor3 = Color3.new(1, 1, 1)
+velLimitBox.PlaceholderText = "Limite de Velocidade"
+velLimitBox.Font = Enum.Font.Gotham
+velLimitBox.TextSize = 13
+velLimitBox.Text = ""
+Instance.new("UICorner", velLimitBox).CornerRadius = UDim.new(0, 6)
+
+local velBtn = Instance.new("TextButton", panelContent)
+velBtn.Size = UDim2.new(0.9, 0, 0, 30)
+velBtn.Position = UDim2.new(0.05, 0, 0, 140)
+velBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 100)
+velBtn.TextColor3 = Color3.new(1, 1, 1)
+velBtn.Text = "Ativar Velocidade"
+velBtn.Font = Enum.Font.GothamBold
+velBtn.TextSize = 13
+Instance.new("UICorner", velBtn).CornerRadius = UDim.new(0, 7)
+
+--========================================================--
+-- BOLINHA FLUTUANTE
+--========================================================--
+local bubble = Instance.new("TextButton", gui)
+bubble.Size = UDim2.new(0, 44, 0, 44)
+bubble.Position = UDim2.new(0, 130, 0.01, 5)
+bubble.BackgroundColor3 = Color3.fromRGB(90, 80, 200)
+bubble.TextColor3 = Color3.new(1, 1, 1)
+bubble.Text = "P"
+bubble.Font = Enum.Font.GothamBlack
+bubble.TextSize = 18
+bubble.Visible = false
+bubble.ZIndex = 20
+Instance.new("UICorner", bubble).CornerRadius = UDim.new(1, 0)
+local bubStroke = Instance.new("UIStroke", bubble)
+bubStroke.Color = Color3.fromRGB(150, 130, 255)
+bubStroke.Thickness = 2
+
+--========================================================--
+-- FUNÇÕES DE ANIMAÇÃO
+--========================================================--
+local TI_FAST   = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local TI_SPRING = TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+
+local function setContentVisible(v)
+	panelContent.Visible = v
+end
+
+-- Expanded → Minimized
+local function toMinimized()
+	if animating then return end
+	animating = true
+	setContentVisible(false)
+	TweenService:Create(startPanel, TI_FAST, {
+		Size = UDim2.new(0, PANEL_W, 0, MINI_H)
+	}):Play()
+	task.delay(0.25, function()
+		panelState = "minimized"
+		animating = false
+	end)
+end
+
+-- Minimized → Expanded
+local function toExpanded()
+	if animating then return end
+	animating = true
+	startPanel.Visible = true
+	TweenService:Create(startPanel, TI_SPRING, {
+		Size = UDim2.new(0, PANEL_W, 0, PANEL_H)
+	}):Play()
+	task.delay(0.2, function()
+		setContentVisible(true)
+		panelState = "expanded"
+		animating = false
+	end)
+end
+
+-- Expanded/Minimized → Bubble
+local function toBubble()
+	if animating then return end
+	animating = true
+	-- Guarda posição atual para a bolinha aparecer no mesmo lugar
+	local px = startPanel.Position.X.Offset
+	local py = startPanel.Position.Y.Offset
+	setContentVisible(false)
+	-- Encolhe o painel até virar ponto
+	TweenService:Create(startPanel, TI_FAST, {
+		Size = UDim2.new(0, 0, 0, 0),
+		BackgroundTransparency = 1
+	}):Play()
+	spStroke.Enabled = false
+	task.delay(0.25, function()
+		startPanel.Visible = false
+		-- Mostra bolinha na posição do painel
+		bubble.Position = UDim2.new(0, px, 0, py)
+		bubble.Size = UDim2.new(0, 0, 0, 0)
+		bubble.Visible = true
+		TweenService:Create(bubble, TI_SPRING, {
+			Size = UDim2.new(0, 44, 0, 44)
+		}):Play()
+		panelState = "bubble"
+		animating = false
+	end)
+end
+
+-- Bubble → Expanded
+local function fromBubble()
+	if animating then return end
+	animating = true
+	local px = bubble.Position.X.Offset
+	local py = bubble.Position.Y.Offset
+	-- Encolhe bolinha
+	TweenService:Create(bubble, TI_FAST, {
+		Size = UDim2.new(0, 0, 0, 0)
+	}):Play()
+	task.delay(0.2, function()
+		bubble.Visible = false
+		-- Mostra painel expandindo do mesmo ponto
+		startPanel.Position = UDim2.new(0, px, 0, py)
+		startPanel.Size = UDim2.new(0, 0, 0, 0)
+		startPanel.BackgroundTransparency = 0
+		startPanel.Visible = true
+		spStroke.Enabled = true
+		setContentVisible(false)
+		TweenService:Create(startPanel, TI_SPRING, {
+			Size = UDim2.new(0, PANEL_W, 0, PANEL_H)
+		}):Play()
+		task.delay(0.25, function()
+			setContentVisible(true)
+			panelState = "expanded"
+			animating = false
+		end)
+	end)
+end
+
+-- Botão minimizar
+minBtn.MouseButton1Click:Connect(function()
+	if panelState == "expanded" then
+		toMinimized()
+	elseif panelState == "minimized" then
+		toExpanded()
+	end
+end)
+
+-- Botão X → bolinha
+closeBtn.MouseButton1Click:Connect(function()
+	if panelState == "expanded" or panelState == "minimized" then
+		toBubble()
+	end
+end)
+
+-- Bolinha → painel
+bubble.MouseButton1Click:Connect(function()
+	if panelState == "bubble" then
+		fromBubble()
+	end
+end)
+
+-- Clique na barra de título minimizada também expande
+topBar.InputBegan:Connect(function(i)
+	if i.UserInputType == Enum.UserInputType.MouseButton1 and panelState == "minimized" then
+		toExpanded()
+	end
+end)
+
+--========================================================--
+-- DRAG DO PAINEL
+--========================================================--
+local dragSP, diSP, dsSP, spSP = false, nil, nil, nil
+local UIS = game:GetService("UserInputService")
+
+startPanel.InputBegan:Connect(function(i)
+	if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+		dragSP = true
+		dsSP = i.Position
+		spSP = startPanel.Position
+		i.Changed:Connect(function()
+			if i.UserInputState == Enum.UserInputState.End then dragSP = false end
+		end)
+	end
+end)
+startPanel.InputChanged:Connect(function(i)
+	if i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch then
+		diSP = i
+	end
+end)
+
+-- DRAG DA BOLINHA
+local dragBub, diBub, dsBub, spBub = false, nil, nil, nil
+
+bubble.InputBegan:Connect(function(i)
+	if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+		dragBub = true
+		dsBub = i.Position
+		spBub = bubble.Position
+		i.Changed:Connect(function()
+			if i.UserInputState == Enum.UserInputState.End then dragBub = false end
+		end)
+	end
+end)
+bubble.InputChanged:Connect(function(i)
+	if i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch then
+		diBub = i
+	end
+end)
+
+Run.RenderStepped:Connect(function()
+	if dragSP and diSP then
+		local delta = diSP.Position - dsSP
+		startPanel.Position = UDim2.new(spSP.X.Scale, spSP.X.Offset + delta.X, spSP.Y.Scale, spSP.Y.Offset + delta.Y)
+	end
+	if dragBub and diBub then
+		local delta = diBub.Position - dsBub
+		bubble.Position = UDim2.new(spBub.X.Scale, spBub.X.Offset + delta.X, spBub.Y.Scale, spBub.Y.Offset + delta.Y)
+	end
+end)
+
+--========================================================--
+-- LINHA DE LARGADA 3D
+--========================================================--
+local function createStartLine(position, lookVector)
+	if startLineFolder then startLineFolder:Destroy() end
+	startLineFolder = Instance.new("Folder")
+	startLineFolder.Name = "F1StartLine"
+	startLineFolder.Parent = workspace
+
+	local rp = RaycastParams.new()
+	rp.FilterType = Enum.RaycastFilterType.Exclude
+	rp.FilterDescendantsInstances = {player.Character, startLineFolder}
+	local hit = workspace:Raycast(position, Vector3.new(0, -50, 0), rp)
+	local groundY = hit and hit.Position.Y or (position.Y - 3)
+
+	local rightVec = Vector3.new(-lookVector.Z, 0, lookVector.X).Unit
+	local center = Vector3.new(position.X, groundY + LINE_HEIGHT / 2, position.Z)
+
+	startLinePosition = center
+	startLineNormal   = lookVector
+	startLineRight    = rightVec
+
+	local TILE_SIZE = 4
+	local TILE_DEPTH = LINE_WIDTH_3D + 0.1
+	local TILE_HEIGHT = LINE_HEIGHT
+	local numTiles = math.floor(LINE_LENGTH / TILE_SIZE)
+	local startOffset = -(numTiles * TILE_SIZE) / 2 + TILE_SIZE / 2
+
+	for i = 0, numTiles - 1 do
+		local tile = Instance.new("Part")
+		tile.Size = Vector3.new(TILE_SIZE, TILE_HEIGHT, TILE_DEPTH)
+		local tilePos = center + rightVec * (startOffset + i * TILE_SIZE)
+		tile.CFrame = CFrame.new(tilePos, tilePos + rightVec)
+		tile.Anchored = true
+		tile.CanCollide = false
+		tile.Material = Enum.Material.SmoothPlastic
+		tile.Transparency = 0
+		tile.BrickColor = (i % 2 == 0) and BrickColor.new("Black") or BrickColor.new("White")
+		tile.Parent = startLineFolder
+	end
+end
+
+local function isWithinStartLine(pos)
+	if not startLinePosition or not startLineRight or not startLineNormal then return false end
+	local toPos = pos - startLinePosition
+	return math.abs(toPos:Dot(startLineRight)) <= (LINE_LENGTH / 2) + 2
+		and math.abs(toPos:Dot(startLineNormal)) <= 3
+end
+
+local function isInFrontOfStartLine(pos)
+	if not startLinePosition or not startLineNormal then return nil end
+	return (pos - startLinePosition):Dot(startLineNormal) > 0
+end
+
+local startLineData = {}
+local startLineConn = nil
+
+local function getCharPos(plr)
+	local char = plr.Character
+	if not char then return nil end
+	local hum = char:FindFirstChild("Humanoid")
+	if hum and hum.SeatPart and hum.SeatPart:IsA("VehicleSeat") then
+		local vehicle = hum.SeatPart.Parent
+		if vehicle then
+			if vehicle.PrimaryPart then return vehicle.PrimaryPart.Position end
+			return hum.SeatPart.Position
+		end
+	end
+	return nil
+end
+
+local function checkStartLineCrossing()
+	if not startLinePosition then return end
+	local now = tick()
+	for _, plr in pairs(Players:GetPlayers()) do
+		local pos = getCharPos(plr)
+		if not pos then continue end
+		if not isWithinStartLine(pos) then continue end
+		if not startLineData[plr.UserId] then
+			startLineData[plr.UserId] = {wasInFront = nil, lastTime = 0}
+		end
+		local d = startLineData[plr.UserId]
+		if now - d.lastTime < DEBOUNCE_TIME then
+			d.wasInFront = isInFrontOfStartLine(pos)
+			continue
+		end
+		local inFront = isInFrontOfStartLine(pos)
+		if d.wasInFront ~= nil and d.wasInFront ~= inFront then
+			d.lastTime = now
+			local dpEntry = dataP[plr]
+			if dpEntry then
+				if not dpEntry.active and not dpEntry.cool then
+					task.delay(DELAY, function()
+						if dpEntry and not dpEntry.cool then
+							dpEntry.active = true
+							dpEntry.start = tick()
+						end
+					end)
+				elseif dpEntry.active then
+					local lap = tick() - dpEntry.start
+					if not bestLap[plr.Name] or lap < bestLap[plr.Name] then
+						bestLap[plr.Name] = lap
+						if lap < record then
+							record = lap
+							showFastLap(getPlayerTag(plr), lap)
+						end
+						updateBoard()
+					end
+					dpEntry.cool = true
+					dpEntry.active = false
+					task.delay(DELAY, function()
+						if dpEntry then
+							dpEntry.cool = false
+							dpEntry.active = true
+							dpEntry.start = tick()
+						end
+					end)
+				end
+			end
+		end
+		d.wasInFront = inFront
+	end
+end
+
+markBtn.MouseButton1Click:Connect(function()
+	local char = player.Character
+	if not char then return end
+	local hrp = char:FindFirstChild("HumanoidRootPart")
+	if not hrp then return end
+	createStartLine(hrp.Position, hrp.CFrame.LookVector)
+	startLineActive = true
+	startLineData = {}
+	for _, plr in pairs(Players:GetPlayers()) do
+		local pos = getCharPos(plr)
+		startLineData[plr.UserId] = {
+			wasInFront = pos and isInFrontOfStartLine(pos) or nil,
+			lastTime = 0
+		}
+	end
+	if startLineConn then startLineConn:Disconnect() end
+	startLineConn = Run.Heartbeat:Connect(checkStartLineCrossing)
+	markBtn.Text = "Largada Marcada!"
+	markBtn.BackgroundColor3 = Color3.fromRGB(60, 180, 80)
+	removeBtn.Visible = true
+	task.wait(1.5)
+	markBtn.Text = "Remarcar Largada"
+	markBtn.BackgroundColor3 = Color3.fromRGB(90, 80, 200)
+end)
+
+removeBtn.MouseButton1Click:Connect(function()
+	if startLineFolder then
+		startLineFolder:Destroy()
+		startLineFolder   = nil
+		startLinePosition = nil
+		startLineNormal   = nil
+		startLineRight    = nil
+	end
+	if startLineConn then
+		startLineConn:Disconnect()
+		startLineConn = nil
+	end
+	startLineActive = false
+	startLineData = {}
+	removeBtn.Visible = false
+	markBtn.Text = "Marcar Largada"
+	markBtn.BackgroundColor3 = Color3.fromRGB(90, 80, 200)
+end)
+
+--========================================================--
+-- SISTEMA DE VELOCIDADE
+--========================================================--
+local velActive = false
+local velLimit = 0
+local velData = {}
+
+local function getVehicleSpeed(char)
+	local hum = char:FindFirstChildWhichIsA("Humanoid")
+	if not hum then return nil, 0 end
+	local seat = hum.SeatPart
+	if not seat or not seat:IsA("VehicleSeat") then return nil, 0 end
+	local vehicle = seat:FindFirstAncestorWhichIsA("Model")
+	if not vehicle then return nil, 0 end
+	for _, obj in ipairs(vehicle:GetDescendants()) do
+		if obj:IsA("NumberValue") and obj.Name:lower():find("speed") then
+			return obj, obj.Value
+		end
+	end
+	return nil, 0
+end
+
+local alertFolder = Instance.new("Folder", gui)
+
+local function showSpeedAlert(name, vel)
+	local t = Instance.new("TextLabel", alertFolder)
+	t.Size = UDim2.new(0.35, 0, 0, 25)
+	local count = #alertFolder:GetChildren()
+	t.Position = UDim2.new(0.325, 0, 0.05 + (count - 1) * 0.035, 0)
+	t.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+	t.TextColor3 = Color3.new(1, 1, 1)
+	t.TextScaled = true
+	t.Text = "AVISO: " .. name .. " passou do limite! (" .. vel .. ")"
+	t.Font = Enum.Font.GothamBold
+	t.ZIndex = 5
+	Instance.new("UICorner", t).CornerRadius = UDim.new(0, 6)
+	task.delay(2, function()
+		for i = 1, 20 do
+			task.wait(0.025)
+			t.BackgroundTransparency = i / 20
+			t.TextTransparency = i / 20
+		end
+		t:Destroy()
+	end)
+end
+
+local function stopVelTracking(plr)
+	if velData[plr] then
+		if velData[plr].conn then velData[plr].conn:Disconnect() end
+		if velData[plr].bill and velData[plr].bill.Parent then
+			velData[plr].bill:Destroy()
+		end
+		velData[plr] = nil
+	end
+end
+
+local function startVelTracking(char, plr)
+	stopVelTracking(plr)
+	local hrp = char:FindFirstChild("HumanoidRootPart")
+	if not hrp then
+		hrp = char:WaitForChild("HumanoidRootPart", 3)
+		if not hrp then return end
+	end
+	local bill = Instance.new("BillboardGui", char)
+	bill.Size = UDim2.new(4, 0, 2, 0)
+	bill.StudsOffset = Vector3.new(0, 4, 0)
+	bill.AlwaysOnTop = true
+	local lbl = Instance.new("TextLabel", bill)
+	lbl.Size = UDim2.new(1, 0, 1, 0)
+	lbl.BackgroundTransparency = 1
+	lbl.TextColor3 = Color3.new(1, 1, 1)
+	lbl.TextStrokeTransparency = 0.3
+	lbl.Font = Enum.Font.GothamBold
+	lbl.TextSize = 20
+	lbl.RichText = true
+	local trackedPlr = plr
+	local trackedChar = char
+	local trackedLbl = lbl
+	local entry = {bill = bill, conn = nil, alerted = false}
+	velData[plr] = entry
+	entry.conn = Run.Heartbeat:Connect(function()
+		if not velActive then return end
+		if not trackedChar or not trackedChar.Parent then
+			stopVelTracking(trackedPlr)
+			return
+		end
+		local _, v = getVehicleSpeed(trackedChar)
+		local vInt = math.floor(v)
+		local currentLimit = velLimit
+		local velText
+		if currentLimit > 0 and vInt > currentLimit then
+			velText = '<font color="rgb(255,255,255)">Vel: </font><font color="rgb(255,50,50)">' .. vInt .. ' (!)</font>'
+		else
+			velText = '<font color="rgb(255,255,255)">Vel: </font><font color="rgb(50,255,50)">' .. vInt .. '</font>'
+		end
+		if trackedLbl and trackedLbl.Parent then
+			trackedLbl.Text = trackedPlr.Name .. "\n" .. velText
+		end
+		if currentLimit > 0 and vInt > currentLimit then
+			if not entry.alerted then
+				showSpeedAlert(trackedPlr.Name, vInt)
+				entry.alerted = true
+				task.delay(2, function() entry.alerted = false end)
+			end
+		end
+	end)
+end
+
+local function activateVel()
+	velActive = true
+	velBtn.Text = "Desativar Velocidade"
+	velBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if plr.Character then startVelTracking(plr.Character, plr) end
+		plr.CharacterAdded:Connect(function(char)
+			task.wait(1)
+			if velActive then startVelTracking(char, plr) end
+		end)
+	end
+end
+
+local function deactivateVel()
+	velActive = false
+	velBtn.Text = "Ativar Velocidade"
+	velBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 100)
+	for plr in pairs(velData) do stopVelTracking(plr) end
+end
+
+velBtn.MouseButton1Click:Connect(function()
+	if velActive then deactivateVel() else activateVel() end
+end)
+
+velLimitBox.FocusLost:Connect(function()
+	local v = tonumber(velLimitBox.Text)
+	if v then
+		velLimit = v
+		velLimitBox.Text = "Limite: " .. v
+	else
+		velLimit = 0
+		velLimitBox.Text = ""
+	end
+end)
+
+print("F1 Lap Timer carregado!")
