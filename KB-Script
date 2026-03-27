@@ -193,7 +193,6 @@ end
 -- LOGICA PRINCIPAL DE VOLTAS
 --========================================================--
 local bestLap = {}
-local wasInside = {}
 local dataP = {}
 local DELAY = 2
 local record = math.huge
@@ -239,48 +238,7 @@ end
 
 Run.Heartbeat:Connect(function()
 	for _, plr in ipairs(Players:GetPlayers()) do
-		local char = plr.Character
-		if not char then continue end
-		local root = char:FindFirstChild("HumanoidRootPart")
-		if not root then continue end
-		if not isInVehicle(plr) then
-			wasInside[plr] = false
-			continue
-		end
-		wasInside[plr] = wasInside[plr] or false
 		dataP[plr] = dataP[plr] or {active=false, start=0, cool=false}
-		local now = inside(root)
-		local crossed = now and not wasInside[plr]
-		wasInside[plr] = now
-		local d = dataP[plr]
-		if crossed then
-			if d.cool then continue end
-			if d.active then
-				local lap = tick() - d.start
-				if not bestLap[plr.Name] or lap < bestLap[plr.Name] then
-					bestLap[plr.Name] = lap
-					if lap < record then
-						record = lap
-						showFastLap(getPlayerTag(plr), lap)
-					end
-					updateBoard()
-				end
-				d.cool = true
-				d.active = false
-				task.delay(DELAY, function()
-					d.cool = false
-					d.active = true
-					d.start = tick()
-				end)
-			else
-				task.delay(DELAY, function()
-					if not d.cool then
-						d.active = true
-						d.start = tick()
-					end
-				end)
-			end
-		end
 	end
 	updateBoard()
 end)
@@ -320,7 +278,6 @@ end)
 
 --========================================================--
 -- PAINEL MARCAR / REMOVER LARGADA + VELOCIDADE
--- Estados: "expanded" | "minimized" | "bubble"
 --========================================================--
 local LINE_LENGTH   = 60
 local LINE_WIDTH_3D = 0.5
@@ -335,10 +292,9 @@ local startLineActive   = false
 
 local PANEL_W = 210
 local PANEL_H = 210
-local MINI_H  = 28  -- altura da barra minimizada
+local MINI_H  = 28
 
--- Estado atual do painel
-local panelState = "expanded" -- "expanded" | "minimized" | "bubble"
+local panelState = "expanded"
 local animating = false
 
 --========================================================--
@@ -355,7 +311,6 @@ local spStroke = Instance.new("UIStroke", startPanel)
 spStroke.Color = Color3.fromRGB(90, 80, 200)
 spStroke.Thickness = 2
 
--- Barra do topo (título + botões - e X)
 local topBar = Instance.new("Frame", startPanel)
 topBar.Size = UDim2.new(1, 0, 0, 28)
 topBar.BackgroundTransparency = 1
@@ -370,7 +325,6 @@ spTitle.TextSize = 13
 spTitle.TextColor3 = Color3.new(1, 1, 1)
 spTitle.TextXAlignment = Enum.TextXAlignment.Left
 
--- Botão minimizar ( - )
 local minBtn = Instance.new("TextButton", topBar)
 minBtn.Size = UDim2.new(0, 22, 0, 22)
 minBtn.Position = UDim2.new(1, -50, 0.5, -11)
@@ -381,7 +335,6 @@ minBtn.Font = Enum.Font.GothamBold
 minBtn.TextSize = 16
 Instance.new("UICorner", minBtn).CornerRadius = UDim.new(1, 0)
 
--- Botão fechar/bolinha ( X )
 local closeBtn = Instance.new("TextButton", topBar)
 closeBtn.Size = UDim2.new(0, 22, 0, 22)
 closeBtn.Position = UDim2.new(1, -24, 0.5, -11)
@@ -392,7 +345,6 @@ closeBtn.Font = Enum.Font.GothamBold
 closeBtn.TextSize = 12
 Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(1, 0)
 
--- Conteúdo do painel (tudo abaixo da topBar)
 local panelContent = Instance.new("Frame", startPanel)
 panelContent.Size = UDim2.new(1, 0, 1, -28)
 panelContent.Position = UDim2.new(0, 0, 0, 28)
@@ -483,7 +435,6 @@ local function setContentVisible(v)
 	panelContent.Visible = v
 end
 
--- Expanded → Minimized
 local function toMinimized()
 	if animating then return end
 	animating = true
@@ -497,7 +448,6 @@ local function toMinimized()
 	end)
 end
 
--- Minimized → Expanded
 local function toExpanded()
 	if animating then return end
 	animating = true
@@ -512,15 +462,12 @@ local function toExpanded()
 	end)
 end
 
--- Expanded/Minimized → Bubble
 local function toBubble()
 	if animating then return end
 	animating = true
-	-- Guarda posição atual para a bolinha aparecer no mesmo lugar
 	local px = startPanel.Position.X.Offset
 	local py = startPanel.Position.Y.Offset
 	setContentVisible(false)
-	-- Encolhe o painel até virar ponto
 	TweenService:Create(startPanel, TI_FAST, {
 		Size = UDim2.new(0, 0, 0, 0),
 		BackgroundTransparency = 1
@@ -528,7 +475,6 @@ local function toBubble()
 	spStroke.Enabled = false
 	task.delay(0.25, function()
 		startPanel.Visible = false
-		-- Mostra bolinha na posição do painel
 		bubble.Position = UDim2.new(0, px, 0, py)
 		bubble.Size = UDim2.new(0, 0, 0, 0)
 		bubble.Visible = true
@@ -540,19 +486,16 @@ local function toBubble()
 	end)
 end
 
--- Bubble → Expanded
 local function fromBubble()
 	if animating then return end
 	animating = true
 	local px = bubble.Position.X.Offset
 	local py = bubble.Position.Y.Offset
-	-- Encolhe bolinha
 	TweenService:Create(bubble, TI_FAST, {
 		Size = UDim2.new(0, 0, 0, 0)
 	}):Play()
 	task.delay(0.2, function()
 		bubble.Visible = false
-		-- Mostra painel expandindo do mesmo ponto
 		startPanel.Position = UDim2.new(0, px, 0, py)
 		startPanel.Size = UDim2.new(0, 0, 0, 0)
 		startPanel.BackgroundTransparency = 0
@@ -570,7 +513,6 @@ local function fromBubble()
 	end)
 end
 
--- Botão minimizar
 minBtn.MouseButton1Click:Connect(function()
 	if panelState == "expanded" then
 		toMinimized()
@@ -579,21 +521,18 @@ minBtn.MouseButton1Click:Connect(function()
 	end
 end)
 
--- Botão X → bolinha
 closeBtn.MouseButton1Click:Connect(function()
 	if panelState == "expanded" or panelState == "minimized" then
 		toBubble()
 	end
 end)
 
--- Bolinha → painel
 bubble.MouseButton1Click:Connect(function()
 	if panelState == "bubble" then
 		fromBubble()
 	end
 end)
 
--- Clique na barra de título minimizada também expande
 topBar.InputBegan:Connect(function(i)
 	if i.UserInputType == Enum.UserInputType.MouseButton1 and panelState == "minimized" then
 		toExpanded()
@@ -622,7 +561,6 @@ startPanel.InputChanged:Connect(function(i)
 	end
 end)
 
--- DRAG DA BOLINHA
 local dragBub, diBub, dsBub, spBub = false, nil, nil, nil
 
 bubble.InputBegan:Connect(function(i)
