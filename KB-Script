@@ -20,16 +20,6 @@ local CENTER = (P1 + P2) / 2
 local LENGTH = (P1 - P2).Magnitude
 local WIDTH = 6
 
-local finish = Instance.new("Part")
-finish.Size = Vector3.new(0.5, 0.2, LENGTH)
-finish.Position = CENTER
-finish.Anchored = true
-finish.CanCollide = false
-finish.Color = Color3.fromRGB(255,255,255)
-finish.Transparency = 0.4
-finish.CFrame = CFrame.lookAt(CENTER, CENTER + (P2-P1).Unit)
-finish.Parent = workspace
-
 local function inside(root)
 	local pos = root.Position
 	local AP = pos - P1
@@ -100,6 +90,13 @@ local rowPositions = {
 
 local horizontalOffset = 0.17
 local rows = {}
+local rowPlayerRef = {}
+
+-- Declarações antecipadas
+local bestLap = {}
+local dataP = {}
+local record = math.huge
+local updateBoard
 
 for i = 1, 20 do
 	local row = Instance.new("Frame", textArea)
@@ -135,7 +132,47 @@ for i = 1, 20 do
 	time.TextScaled = true
 	time.TextXAlignment = Enum.TextXAlignment.Left
 
-	rows[i] = {name = name, soft = soft, time = time}
+	local xBtn = Instance.new("TextButton", row)
+	xBtn.Size = UDim2.new(0, 14, 0, 14)
+	xBtn.Position = UDim2.new(1, 2, 0.5, -7)
+	xBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+	xBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	xBtn.Font = Enum.Font.GothamBold
+	xBtn.TextScaled = true
+	xBtn.Text = "X"
+	xBtn.Visible = false
+	xBtn.ZIndex = 5
+	Instance.new("UICorner", xBtn).CornerRadius = UDim.new(0, 3)
+
+	local rowIndex = i
+	xBtn.MouseButton1Click:Connect(function()
+		local ref = rowPlayerRef[rowIndex]
+		if not ref then return end
+		bestLap[ref] = nil
+		record = math.huge
+		for _, v in pairs(bestLap) do
+			if v < record then record = v end
+		end
+		for _, plr in ipairs(Players:GetPlayers()) do
+			if plr.Name == ref then
+				local dpEntry = dataP[plr]
+				if dpEntry then
+					dpEntry.active = false
+					dpEntry.cool = true
+					task.delay(2, function()
+						if dpEntry then
+							dpEntry.cool = false
+							dpEntry.active = false
+						end
+					end)
+				end
+				break
+			end
+		end
+		updateBoard()
+	end)
+
+	rows[i] = {name = name, soft = soft, time = time, xBtn = xBtn}
 end
 
 --========================================================--
@@ -192,17 +229,14 @@ end
 --========================================================--
 -- LOGICA PRINCIPAL DE VOLTAS
 --========================================================--
-local bestLap = {}
-local dataP = {}
 local DELAY = 2
-local record = math.huge
 
 local function getPlayerTag(playerObject)
 	local nameToUse = playerObject.DisplayName or playerObject.Name
 	return string.upper(string.sub(nameToUse, 1, 3))
 end
 
-local function updateBoard()
+updateBoard = function()
 	local arr = {}
 	for _, plr in ipairs(Players:GetPlayers()) do
 		local bestTime = bestLap[plr.Name]
@@ -210,9 +244,11 @@ local function updateBoard()
 	end
 	table.sort(arr, function(a,b) return a.sortTime < b.sortTime end)
 	record = arr[1] and arr[1].t or math.huge
+
 	for i = 1,20 do
 		if arr[i] then
 			local pl = arr[i]
+			rowPlayerRef[i] = pl.n.Name
 			rows[i].name.Text = getPlayerTag(pl.n)
 			rows[i].soft.Text = "S"
 			if pl.t then
@@ -224,14 +260,18 @@ local function updateBoard()
 					rows[i].time.Text = fmtDiff(diff)
 					rows[i].time.TextColor3 = Color3.fromRGB(255,255,255)
 				end
+				rows[i].xBtn.Visible = true
 			else
 				rows[i].time.Text = "NO TIME"
 				rows[i].time.TextColor3 = Color3.fromRGB(255,255,255)
+				rows[i].xBtn.Visible = false
 			end
 		else
+			rowPlayerRef[i] = nil
 			rows[i].name.Text = ""
 			rows[i].soft.Text = ""
 			rows[i].time.Text = ""
+			rows[i].xBtn.Visible = false
 		end
 	end
 end
