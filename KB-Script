@@ -331,7 +331,7 @@ local startLineRight    = nil
 local startLineActive   = false
 
 local PANEL_W = 210
-local PANEL_H = 210
+local PANEL_H = 260   -- aumentado para caber o crédito
 local MINI_H  = 28
 
 local panelState = "expanded"
@@ -446,6 +446,37 @@ velBtn.Text = "Ativar Velocidade"
 velBtn.Font = Enum.Font.GothamBold
 velBtn.TextSize = 13
 Instance.new("UICorner", velBtn).CornerRadius = UDim.new(0, 7)
+
+--========================================================--
+-- CREDITO - MADE BY MAVERICKKY
+--========================================================--
+local sepCredit = Instance.new("Frame", panelContent)
+sepCredit.Size = UDim2.new(0.9, 0, 0, 1)
+sepCredit.Position = UDim2.new(0.05, 0, 0, 182)
+sepCredit.BackgroundColor3 = Color3.fromRGB(60, 120, 200)
+sepCredit.BorderSizePixel = 0
+
+local creditMade = Instance.new("TextLabel", panelContent)
+creditMade.Size = UDim2.new(0.9, 0, 0, 18)
+creditMade.Position = UDim2.new(0.05, 0, 0, 190)
+creditMade.BackgroundTransparency = 1
+creditMade.Text = "Made by Maverickky"
+creditMade.Font = Enum.Font.GothamBold
+creditMade.TextSize = 13
+creditMade.TextColor3 = Color3.fromRGB(100, 180, 255)
+creditMade.TextXAlignment = Enum.TextXAlignment.Center
+creditMade.ZIndex = 2
+
+local creditDiscord = Instance.new("TextLabel", panelContent)
+creditDiscord.Size = UDim2.new(0.9, 0, 0, 18)
+creditDiscord.Position = UDim2.new(0.05, 0, 0, 210)
+creditDiscord.BackgroundTransparency = 1
+creditDiscord.Text = "Discord: @maverickky._."
+creditDiscord.Font = Enum.Font.GothamBold
+creditDiscord.TextSize = 13
+creditDiscord.TextColor3 = Color3.fromRGB(100, 180, 255)
+creditDiscord.TextXAlignment = Enum.TextXAlignment.Center
+creditDiscord.ZIndex = 2
 
 --========================================================--
 -- BOLINHA FLUTUANTE
